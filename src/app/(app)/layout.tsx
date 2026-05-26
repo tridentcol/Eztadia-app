@@ -9,6 +9,7 @@ import { NewTransactionDialog } from '@/components/app/new-transaction-dialog'
 import { NewCategoryDialog } from '@/components/app/new-category-dialog'
 import { EditCategoryDialog } from '@/components/app/edit-category-dialog'
 import { NewBudgetDialog } from '@/components/app/new-budget-dialog'
+import { CopilotDialog } from '@/components/app/copilot-dialog'
 import {
   listAvailableCategories,
   listUserAccountsBasic,
@@ -44,6 +45,7 @@ export default async function AppLayout({
       <NewCategoryDialog categories={categoriesForForm} />
       <EditCategoryDialog categories={categoriesForForm} />
       <NewBudgetDialog categories={categoriesForForm} />
+      <CopilotDialog />
     </div>
   )
 }

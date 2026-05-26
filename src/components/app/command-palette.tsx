@@ -37,14 +37,22 @@ export function CommandPalette() {
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      if (!(e.metaKey || e.ctrlKey)) return
+      const key = e.key.toLowerCase()
+      if (key === 'k') {
         e.preventDefault()
         toggle()
+        return
+      }
+      if (key === 'j') {
+        e.preventDefault()
+        setOpen(false)
+        setTimeout(() => openDialog('copilot'), 0)
       }
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [toggle])
+  }, [toggle, setOpen, openDialog])
 
   function runNavigate(href: string) {
     setOpen(false)
@@ -170,9 +178,9 @@ export function CommandPalette() {
                 className="mt-2 [&_[cmdk-group-heading]]:px-4 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-[0.08em] [&_[cmdk-group-heading]]:text-[color:var(--accent-ai)]"
               >
                 <Command.Item
-                  value="Preguntar a Finanzia"
-                  disabled
-                  className="text-text-secondary aria-selected:bg-surface-hover data-[disabled=true]:opacity-50 mx-2 flex h-9 cursor-not-allowed items-center gap-3 rounded-md px-2 text-sm"
+                  value="Preguntar a Finanzia copiloto IA"
+                  onSelect={() => runOpenDialog('copilot')}
+                  className="text-text-secondary aria-selected:bg-surface-hover aria-selected:text-text mx-2 flex h-9 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors"
                 >
                   <Ai
                     strokeWidth={1.5}
@@ -180,7 +188,7 @@ export function CommandPalette() {
                     style={{ color: 'var(--accent-ai)' }}
                   />
                   <span className="flex-1">Preguntar a Finanzia</span>
-                  <span className="text-text-tertiary text-[11px]">próximamente</span>
+                  <span className="text-text-tertiary text-[11px] tracking-wider">⌘ J</span>
                 </Command.Item>
               </Command.Group>
             </Command.List>
