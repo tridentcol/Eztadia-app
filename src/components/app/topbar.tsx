@@ -30,8 +30,9 @@ function resolveTitle(pathname: string): string {
 
 /**
  * Topbar adaptable.
- *  - >=lg: título a la izquierda + buscador estilo Linear + ⌘K + ⌘J + avatar.
- *  - <lg: brand mark + título compacto + botón buscador icon-only + spark IA.
+ *  - >=md: SidebarTrigger (toggle del shadcn sidebar) + título.
+ *  - <md: brand mark Finanzia + título compacto (no hay sidebar, hay
+ *    MobileNav fijo abajo).
  */
 export function Topbar({ unreadAlerts = 0 }: { unreadAlerts?: number }) {
   const pathname = usePathname()
@@ -45,7 +46,14 @@ export function Topbar({ unreadAlerts = 0 }: { unreadAlerts?: number }) {
   return (
     <header className="border-border-default bg-background sticky top-0 z-30 flex h-14 items-center justify-between gap-3 border-b px-4 lg:px-6">
       <div className="flex items-center gap-2">
-        <SidebarTrigger className="-ml-1" />
+        <SidebarTrigger className="-ml-1 hidden md:inline-flex" />
+        <span
+          aria-hidden
+          className="grid size-6 shrink-0 place-items-center rounded-[6px] md:hidden"
+          style={{ background: 'var(--accent-ai)' }}
+        >
+          <span className="text-[12px] font-semibold text-black">F</span>
+        </span>
         <h1 className="text-text text-[14px] font-semibold tracking-tight lg:text-[15px]">
           {title}
         </h1>

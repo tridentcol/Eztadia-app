@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import { requireCurrentUser } from '@/lib/auth'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { AppSidebar } from '@/components/app/app-sidebar'
+import { MobileNav } from '@/components/app/mobile-nav'
 import { Topbar } from '@/components/app/topbar'
 import { CommandPalette } from '@/components/app/command-palette'
 import { NewAccountDialog } from '@/components/app/new-account-dialog'
@@ -40,10 +41,11 @@ export default async function AppLayout({
       <AppSidebar />
       <SidebarInset>
         <Topbar unreadAlerts={unreadAlerts} />
-        <main className="mx-auto w-full max-w-[1120px] px-4 pt-6 pb-10 sm:px-6 lg:px-8 lg:py-10">
+        <main className="mx-auto w-full max-w-[1120px] px-4 pt-6 pb-[88px] sm:px-6 md:pb-10 lg:px-8 lg:py-10">
           {children}
         </main>
       </SidebarInset>
+      <MobileNav />
       <CommandPalette />
       <NewAccountDialog />
       <NewTransactionDialog

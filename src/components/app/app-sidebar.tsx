@@ -15,6 +15,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from '@/components/ui/sidebar'
 import { icons, type IconName } from '@/lib/design/icons'
 
@@ -57,6 +58,11 @@ function isActive(pathname: string, href: string): boolean {
 
 export function AppSidebar() {
   const pathname = usePathname()
+  const { isMobile } = useSidebar()
+
+  // En mobile usamos MobileNav (bottom-nav fijo + sheet "Más").
+  // El sidebar es exclusivo de >=md.
+  if (isMobile) return null
 
   return (
     <Sidebar collapsible="icon">
