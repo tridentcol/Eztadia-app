@@ -3,14 +3,17 @@ import Link from 'next/link'
 
 import { requireCurrentUser } from '@/lib/auth'
 import {
+  countUnclassifiedTransactions,
+  listAvailableCategories,
   listTransactionsForUser,
   type TransactionFilters,
 } from '@/lib/db/queries/transactions'
 import { EmptyState } from '@/components/app/empty-state'
 import { Amount } from '@/components/app/amount'
 import { NewTransactionTrigger } from '@/components/app/new-transaction-trigger'
+import { CategoryCell, type CategoryOption } from '@/components/app/category-cell'
+import { RecategorizeButton } from '@/components/app/recategorize-button'
 import { cn } from '@/lib/utils'
-import { icons } from '@/lib/design/icons'
 
 export const metadata: Metadata = {
   title: 'Transacciones',
@@ -60,11 +63,21 @@ export default async function TransaccionesPage({
     return undefined
   })()
 
-  const list = await listTransactionsForUser(user.id, {
-    kind,
-    accountId: params.accountId,
-    limit: 200,
-  })
+  const [list, available, unclassified] = await Promise.all([
+    listTransactionsForUser(user.id, {
+      kind,
+      accountId: params.accountId,
+      limit: 200,
+    }),
+    listAvailableCategories(user.id),
+    countUnclassifiedTransactions(user.id),
+  ])
+  const categoryOptions: CategoryOption[] = available.map((c) => ({
+    id: c.id,
+    name: c.name,
+    kind: c.kind,
+    parentId: c.parentId,
+  }))
 
   return (
     <div className="flex flex-col gap-10">
@@ -75,7 +88,10 @@ export default async function TransaccionesPage({
             Bitácora
           </h1>
         </div>
-        <NewTransactionTrigger />
+        <div className="flex items-center gap-2">
+          <RecategorizeButton pending={unclassified} />
+          <NewTransactionTrigger />
+        </div>
       </header>
 
       <nav
@@ -146,30 +162,15 @@ export default async function TransaccionesPage({
                     {tx.account.name}
                   </td>
                   <td className="px-5 py-3.5">
-                    {tx.category ? (
-                      <span className="text-text-secondary text-sm">
-                        {tx.category.name}
-                      </span>
-                    ) : (
-                      <span className="text-text-tertiary text-sm">—</span>
-                    )}
-                    {tx.aiCategorized && (
-                      <span
-                        title="Categorizada por la IA"
-                        className="ml-1.5 inline-flex"
-                      >
-                        {(() => {
-                          const Spark = icons.sparkles
-                          return (
-                            <Spark
-                              strokeWidth={1.5}
-                              className="size-3"
-                              style={{ color: 'var(--accent-ai)' }}
-                            />
-                          )
-                        })()}
-                      </span>
-                    )}
+                    <CategoryCell
+                      transactionId={tx.id}
+                      txKind={tx.kind}
+                      currentCategoryId={tx.category?.id ?? null}
+                      currentCategoryName={tx.category?.name ?? null}
+                      aiCategorized={tx.aiCategorized}
+                      aiConfidence={tx.aiConfidence}
+                      options={categoryOptions}
+                    />
                   </td>
                   <td className="px-5 py-3.5 text-right">
                     <Amount

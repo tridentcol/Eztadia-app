@@ -10,6 +10,11 @@ import { db } from '@/lib/db/client'
 import { accounts, categories, profiles, transactions } from '@/lib/db/schema'
 import { currencyCodes } from '@/lib/currency/currencies'
 import { convertAmount } from '@/lib/currency/rates'
+import {
+  categorizeTransaction,
+  recategorizeUnclassified,
+} from '@/lib/ai/categorize'
+import { embedTransaction } from '@/lib/ai/embed-transaction'
 
 const txKindValues = ['income', 'expense', 'transfer'] as const
 
@@ -235,12 +240,36 @@ export async function createTransaction(
     { fallbackToOne: true },
   )
 
+  // Si el usuario no eligió categoría y el kind no es transfer, le pedimos
+  // a la IA que sugiera (kNN + LLM fallback). Si las keys no están
+  // configuradas o no hay confianza, queda sin categoría.
+  let aiSuggestion: Awaited<ReturnType<typeof categorizeTransaction>> = null
+  if (!data.categoryId && data.kind !== 'transfer') {
+    try {
+      aiSuggestion = await categorizeTransaction({
+        userId: user.id,
+        description: data.description,
+        merchant: data.merchant ?? null,
+        kind: data.kind,
+      })
+    } catch {
+      aiSuggestion = null
+    }
+  }
+
   const [row] = await db
     .insert(transactions)
     .values({
       userId: user.id,
       accountId: data.accountId,
-      categoryId: data.categoryId ?? null,
+      categoryId:
+        data.categoryId ?? (aiSuggestion?.categoryId ? aiSuggestion.categoryId : null),
+      aiCategorized: !data.categoryId && !!aiSuggestion?.categoryId,
+      aiConfidence:
+        !data.categoryId && aiSuggestion?.confidence && aiSuggestion.confidence > 0
+          ? aiSuggestion.confidence.toFixed(2)
+          : null,
+      embedding: aiSuggestion?.embedding ?? undefined,
       date: data.date,
       amountOriginal: data.amountOriginal,
       currency: data.currency,
@@ -268,3 +297,103 @@ export async function createTransaction(
   return { ok: true, data: { id: row.id } }
 }
 
+const setCategorySchema = z.object({
+  transactionId: z.string().uuid('ID inválido'),
+  categoryId: z.string().uuid('ID inválido').nullable(),
+})
+
+/**
+ * Cambia la categoría de una transacción y marca `user_corrected = true`.
+ * Si la transacción aún no tiene embedding (fue creada sin IA), lo genera
+ * para que sea ciudadana de primera clase en futuras kNN. La señal
+ * `user_corrected` enseña al modelo en sesiones posteriores.
+ */
+export async function setTransactionCategory(input: {
+  transactionId: string
+  categoryId: string | null
+}): Promise<ActionResult> {
+  const user = await requireCurrentUser()
+  const parsed = setCategorySchema.safeParse(input)
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: { code: 'validation', message: 'ID inválido.' },
+    }
+  }
+  const { transactionId, categoryId } = parsed.data
+
+  const tx = await db.query.transactions.findFirst({
+    where: and(eq(transactions.id, transactionId), eq(transactions.userId, user.id)),
+  })
+  if (!tx) {
+    return {
+      ok: false,
+      error: { code: 'not_found', message: 'Transacción no encontrada.' },
+    }
+  }
+
+  if (categoryId) {
+    const cat = await db.query.categories.findFirst({
+      where: and(
+        eq(categories.id, categoryId),
+        or(isNull(categories.userId), eq(categories.userId, user.id)),
+      ),
+    })
+    if (!cat) {
+      return {
+        ok: false,
+        error: { code: 'invalid_category', message: 'Categoría inválida.' },
+      }
+    }
+    if (cat.kind !== tx.kind) {
+      return {
+        ok: false,
+        error: {
+          code: 'kind_mismatch',
+          message: `La categoría es de tipo ${cat.kind}, no ${tx.kind}.`,
+        },
+      }
+    }
+  }
+
+  // Si la transacción aún no tiene embedding, intentamos generarlo ahora.
+  let embedding: number[] | null = null
+  if (!tx.embedding) {
+    try {
+      embedding = await embedTransaction(tx.description, tx.merchant)
+    } catch {
+      embedding = null
+    }
+  }
+
+  await db
+    .update(transactions)
+    .set({
+      categoryId,
+      userCorrected: true,
+      aiCategorized: false,
+      aiConfidence: null,
+      ...(embedding ? { embedding } : {}),
+      updatedAt: new Date(),
+    })
+    .where(eq(transactions.id, transactionId))
+
+  revalidatePath('/transacciones')
+  revalidatePath('/dashboard')
+  revalidatePath('/presupuestos')
+  return { ok: true, data: undefined }
+}
+
+/**
+ * Re-categoriza con IA todas las transacciones del usuario que estén sin
+ * categoría y no marcadas como corregidas por el usuario. Procesa en chunks.
+ */
+export async function bulkRecategorize(): Promise<
+  ActionResult<{ processed: number; categorized: number }>
+> {
+  const user = await requireCurrentUser()
+  const result = await recategorizeUnclassified(user.id, { limit: 200 })
+  revalidatePath('/transacciones')
+  revalidatePath('/dashboard')
+  return { ok: true, data: result }
+}

@@ -10,6 +10,7 @@ import { accounts, importBatches, profiles, transactions } from '@/lib/db/schema
 import { parseRow, type ParseRowError } from '@/lib/import/parse-row'
 import type { ColumnMapping } from '@/lib/import/infer-columns'
 import { convertAmount, getRate } from '@/lib/currency/rates'
+import { categorizeBatch } from '@/lib/ai/categorize'
 
 const importSchema = z.object({
   accountId: z.string().uuid(),
@@ -132,6 +133,31 @@ export async function runImport(input: ImportInput): Promise<ImportResult> {
       kind: result.kind,
       importBatchId: batch.id,
     })
+  }
+
+  // Auto-categorización batch (kNN only, sin LLM) si OpenAI está configurada.
+  // Anota cada row con categoryId / embedding / aiCategorized / aiConfidence.
+  if (toInsert.length > 0) {
+    const suggestions = await categorizeBatch(
+      user.id,
+      toInsert.map((r) => ({
+        description: r.description,
+        merchant: r.merchant ?? null,
+        kind: r.kind,
+      })),
+    )
+    for (let i = 0; i < toInsert.length; i++) {
+      const s = suggestions[i]
+      if (!s) continue
+      if (s.categoryId) {
+        toInsert[i]!.categoryId = s.categoryId
+        toInsert[i]!.aiCategorized = true
+        toInsert[i]!.aiConfidence = s.confidence.toFixed(2)
+      }
+      if (s.embedding) {
+        toInsert[i]!.embedding = s.embedding
+      }
+    }
   }
 
   // Inserción por chunks para no exceder param limits

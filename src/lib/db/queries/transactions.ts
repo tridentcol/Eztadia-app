@@ -134,6 +134,27 @@ export async function listAvailableCategories(userId: string) {
     .orderBy(categories.kind, categories.sortOrder)
 }
 
+/**
+ * Cuenta transacciones del usuario sin categoría (categoryId IS NULL) y kind
+ * que sí admite categorización (income/expense). Sirve para mostrar el badge
+ * "Categorizar N con IA" en el header de `/transacciones`.
+ */
+export async function countUnclassifiedTransactions(userId: string): Promise<number> {
+  const rows = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.userId, userId),
+        isNull(transactions.categoryId),
+        isNull(transactions.deletedAt),
+        sql`${transactions.kind} != 'transfer'`,
+        eq(transactions.userCorrected, false),
+      ),
+    )
+  return rows[0]?.count ?? 0
+}
+
 export async function listUserAccountsBasic(userId: string) {
   return db
     .select({
