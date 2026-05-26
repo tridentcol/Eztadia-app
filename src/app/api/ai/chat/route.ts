@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
+import { createUIMessageStream, createUIMessageStreamResponse } from 'ai'
 
 import { requireCurrentUser } from '@/lib/auth'
 import { db } from '@/lib/db/client'
 import { conversations, messages, profiles } from '@/lib/db/schema'
 import { runCopilotChat } from '@/lib/ai/copilot'
+import { runHeuristic } from '@/lib/heuristic/responder'
+import { formatHeuristicMarkdown } from '@/lib/heuristic/format-response'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -111,21 +114,58 @@ export async function POST(req: Request) {
   })
 
   if (!result) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: {
-          code: 'no_provider',
-          message:
-            'El copiloto necesita ANTHROPIC_API_KEY configurada para responder.',
-        },
+    // Fallback heurístico: sin LLM provider, corremos el motor interno y
+    // emitimos un UIMessageStream con un único text part. El cliente no
+    // distingue — solo ve el mensaje formateado.
+    const lastText =
+      (lastUserMessage as { parts?: Array<{ type: string; text?: string }> })?.parts?.find(
+        (p) => p.type === 'text',
+      )?.text ?? ''
+
+    const heuristic = await runHeuristic(lastText, {
+      userId: user.id,
+      baseCurrency,
+      todayIso: new Date().toISOString().slice(0, 10),
+    })
+    const markdown = formatHeuristicMarkdown(heuristic)
+
+    const stream = createUIMessageStream({
+      async execute({ writer }) {
+        const id = 'heuristic-' + Date.now()
+        writer.write({ type: 'text-start', id })
+        writer.write({ type: 'text-delta', id, delta: markdown })
+        writer.write({ type: 'text-end', id })
+
+        try {
+          await db.insert(messages).values({
+            conversationId: conversationId!,
+            role: 'assistant',
+            content: {
+              text: markdown,
+              finishReason: 'heuristic',
+              toolCalls: null,
+              toolResults: null,
+            } as Record<string, unknown>,
+          })
+          await db
+            .update(conversations)
+            .set({ updatedAt: new Date() })
+            .where(eq(conversations.id, conversationId!))
+        } catch (err) {
+          console.error('[heuristic] persist falló:', err)
+        }
       },
-      { status: 503 },
-    )
+    })
+
+    const response = createUIMessageStreamResponse({ stream })
+    response.headers.set('x-conversation-id', conversationId)
+    response.headers.set('x-copilot-mode', 'heuristic')
+    return response
   }
 
   // Devolvemos el UIMessageStream y propagamos el conversationId vía header.
   const response = result.toUIMessageStreamResponse()
   response.headers.set('x-conversation-id', conversationId)
+  response.headers.set('x-copilot-mode', 'llm')
   return response
 }

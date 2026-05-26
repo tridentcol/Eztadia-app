@@ -128,64 +128,104 @@ export default async function TransaccionesPage({
           action={<NewTransactionTrigger />}
         />
       ) : (
-        <div className="border-border-default bg-surface overflow-hidden rounded-[12px] border">
-          <table className="w-full">
-            <thead>
-              <tr className="border-border-default text-text-tertiary border-b text-[11px] uppercase tracking-[0.08em]">
-                <th className="px-5 py-3 text-left font-medium">Fecha</th>
-                <th className="px-5 py-3 text-left font-medium">Descripción</th>
-                <th className="px-5 py-3 text-left font-medium">Cuenta</th>
-                <th className="px-5 py-3 text-left font-medium">Categoría</th>
-                <th className="px-5 py-3 text-right font-medium">Monto</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.map((tx) => (
-                <tr
-                  key={tx.id}
-                  className="border-border-default/60 hover:bg-surface-hover/60 border-b transition-colors last:border-b-0"
-                >
-                  <td className="text-text-secondary tabular px-5 py-3.5 text-[13px]">
-                    {formatRelativeDate(tx.date)}
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <div className="flex flex-col">
-                      <span className="text-text text-sm">{tx.description}</span>
-                      {tx.kind === 'transfer' && tx.transferAccount && (
-                        <span className="text-text-tertiary text-[11px]">
-                          {tx.account.name} → {tx.transferAccount.name}
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="text-text-secondary px-5 py-3.5 text-sm">
-                    {tx.account.name}
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <CategoryCell
-                      transactionId={tx.id}
-                      txKind={tx.kind}
-                      currentCategoryId={tx.category?.id ?? null}
-                      currentCategoryName={tx.category?.name ?? null}
-                      aiCategorized={tx.aiCategorized}
-                      aiConfidence={tx.aiConfidence}
-                      options={categoryOptions}
-                    />
-                  </td>
-                  <td className="px-5 py-3.5 text-right">
-                    <Amount
-                      value={tx.amountOriginal}
-                      currency={tx.currency}
-                      kind={kindToTone[tx.kind]}
-                      showPositiveSign={tx.kind === 'income'}
-                      className="text-sm"
-                    />
-                  </td>
+        <>
+          {/* Mobile (<md): lista de cards apiladas */}
+          <ul className="flex flex-col gap-2 md:hidden">
+            {list.map((tx) => (
+              <li
+                key={tx.id}
+                className="border-border-default bg-surface flex flex-col gap-2 rounded-[12px] border p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-text text-[14px]">{tx.description}</span>
+                    <span className="text-text-tertiary text-[11px]">
+                      {formatRelativeDate(tx.date)} · {tx.account.name}
+                      {tx.kind === 'transfer' && tx.transferAccount &&
+                        ` → ${tx.transferAccount.name}`}
+                    </span>
+                  </div>
+                  <Amount
+                    value={tx.amountOriginal}
+                    currency={tx.currency}
+                    kind={kindToTone[tx.kind]}
+                    showPositiveSign={tx.kind === 'income'}
+                    className="text-[14px] shrink-0"
+                  />
+                </div>
+                <CategoryCell
+                  transactionId={tx.id}
+                  txKind={tx.kind}
+                  currentCategoryId={tx.category?.id ?? null}
+                  currentCategoryName={tx.category?.name ?? null}
+                  aiCategorized={tx.aiCategorized}
+                  aiConfidence={tx.aiConfidence}
+                  options={categoryOptions}
+                />
+              </li>
+            ))}
+          </ul>
+
+          {/* Desktop (>=md): tabla */}
+          <div className="border-border-default bg-surface hidden overflow-hidden rounded-[12px] border md:block">
+            <table className="w-full">
+              <thead>
+                <tr className="border-border-default text-text-tertiary border-b text-[11px] uppercase tracking-[0.08em]">
+                  <th className="px-5 py-3 text-left font-medium">Fecha</th>
+                  <th className="px-5 py-3 text-left font-medium">Descripción</th>
+                  <th className="px-5 py-3 text-left font-medium">Cuenta</th>
+                  <th className="px-5 py-3 text-left font-medium">Categoría</th>
+                  <th className="px-5 py-3 text-right font-medium">Monto</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {list.map((tx) => (
+                  <tr
+                    key={tx.id}
+                    className="border-border-default/60 hover:bg-surface-hover/60 border-b transition-colors last:border-b-0"
+                  >
+                    <td className="text-text-secondary tabular px-5 py-3.5 text-[13px]">
+                      {formatRelativeDate(tx.date)}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <div className="flex flex-col">
+                        <span className="text-text text-sm">{tx.description}</span>
+                        {tx.kind === 'transfer' && tx.transferAccount && (
+                          <span className="text-text-tertiary text-[11px]">
+                            {tx.account.name} → {tx.transferAccount.name}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="text-text-secondary px-5 py-3.5 text-sm">
+                      {tx.account.name}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <CategoryCell
+                        transactionId={tx.id}
+                        txKind={tx.kind}
+                        currentCategoryId={tx.category?.id ?? null}
+                        currentCategoryName={tx.category?.name ?? null}
+                        aiCategorized={tx.aiCategorized}
+                        aiConfidence={tx.aiConfidence}
+                        options={categoryOptions}
+                      />
+                    </td>
+                    <td className="px-5 py-3.5 text-right">
+                      <Amount
+                        value={tx.amountOriginal}
+                        currency={tx.currency}
+                        kind={kindToTone[tx.kind]}
+                        showPositiveSign={tx.kind === 'income'}
+                        className="text-sm"
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   )

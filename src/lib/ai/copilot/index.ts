@@ -26,7 +26,7 @@ export type RunChatParams = {
  * Suficiente para encadenar 2-3 tools y responder, sin riesgo de loops.
  */
 export async function runCopilotChat(params: RunChatParams) {
-  const provider = getAnthropic()
+  const provider = await getAnthropic({ userId: params.ctx.userId })
   if (!provider) return null
 
   const tools = buildCopilotTools(params.ctx)

@@ -145,9 +145,22 @@ export async function confirmProposedBudget(input: {
 }
 
 /**
- * Sondea si Anthropic está configurado. La UI lo usa para mostrar el dialog
- * habilitado u offline.
+ * Sondea si el copiloto LLM está disponible para el usuario actual.
+ * Orden: integración del usuario → AI Gateway → env operador.
+ *
+ * `mode: 'llm'` significa que el endpoint puede usar Anthropic.
+ * `mode: 'heuristic'` significa que cae al motor interno (sin LLM).
  */
-export async function isCopilotAvailable(): Promise<{ available: boolean }> {
-  return { available: !!process.env.ANTHROPIC_API_KEY }
+export async function isCopilotAvailable(): Promise<{
+  mode: 'llm' | 'heuristic'
+  source: 'user' | 'gateway' | 'operator' | null
+}> {
+  const user = await requireCurrentUser()
+  const userKey = await import('@/lib/integrations/store').then((m) =>
+    m.getUserApiKey({ userId: user.id, provider: 'anthropic', requiredScope: 'chat' }),
+  )
+  if (userKey) return { mode: 'llm', source: 'user' }
+  if (process.env.AI_GATEWAY_API_KEY) return { mode: 'llm', source: 'gateway' }
+  if (process.env.ANTHROPIC_API_KEY) return { mode: 'llm', source: 'operator' }
+  return { mode: 'heuristic', source: null }
 }

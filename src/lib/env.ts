@@ -43,6 +43,11 @@ const serverSchema = z.object({
   // Exchange rates — opcional.
   EXCHANGE_RATE_API_KEY: optionalString(z.string()),
 
+  // Vercel AI Gateway — opcional. Si está, el operador puede dar acceso LLM
+  // gratis sin pegar key de Anthropic/OpenAI directa. Funciona como fallback
+  // antes que las keys env hardcodeadas del operador.
+  AI_GATEWAY_API_KEY: optionalString(z.string()),
+
   // Observability — opcional.
   SENTRY_DSN: optionalString(z.string()),
 

@@ -78,6 +78,17 @@ export const importStatus = pgEnum('import_status', [
   'failed',
 ])
 
+export const integrationProvider = pgEnum('integration_provider', [
+  'anthropic',
+  'openai',
+])
+
+export const integrationStatus = pgEnum('integration_status', [
+  'active',
+  'invalid',
+  'disabled',
+])
+
 // ============================================================
 // users
 // ============================================================
@@ -413,6 +424,38 @@ export const alerts = pgTable(
 // exchange_rates  (cache, composite PK)
 // ============================================================
 
+// ============================================================
+// user_integrations  (vault-backed API keys del usuario)
+// ============================================================
+
+export const userIntegrations = pgTable(
+  'user_integrations',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    provider: integrationProvider('provider').notNull(),
+    /** UUID que apunta a vault.secrets.id donde vive la API key cifrada. */
+    secretId: uuid('secret_id').notNull(),
+    scopes: text('scopes')
+      .array()
+      .notNull()
+      .default(sql`ARRAY[]::text[]`),
+    status: integrationStatus('status').notNull().default('active'),
+    lastValidatedAt: timestamp('last_validated_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.provider] }),
+    index('idx_user_integrations_user').on(t.userId),
+  ],
+)
+
 export const exchangeRates = pgTable(
   'exchange_rates',
   {
@@ -556,3 +599,5 @@ export type ImportBatch = typeof importBatches.$inferSelect
 export type NewImportBatch = typeof importBatches.$inferInsert
 export type ExchangeRate = typeof exchangeRates.$inferSelect
 export type NewExchangeRate = typeof exchangeRates.$inferInsert
+export type UserIntegration = typeof userIntegrations.$inferSelect
+export type NewUserIntegration = typeof userIntegrations.$inferInsert

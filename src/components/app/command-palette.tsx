@@ -78,7 +78,7 @@ export function CommandPalette() {
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
         <Dialog.Content
           aria-describedby={undefined}
-          className="border-border-default bg-surface fixed left-1/2 top-[20vh] z-50 w-[640px] max-w-[calc(100vw-32px)] -translate-x-1/2 overflow-hidden rounded-[16px] border shadow-2xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+          className="border-border-default bg-surface fixed z-50 overflow-hidden border shadow-2xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 inset-x-3 top-3 bottom-3 rounded-[14px] sm:inset-auto sm:left-1/2 sm:top-[20vh] sm:bottom-auto sm:w-[640px] sm:max-w-[calc(100vw-32px)] sm:-translate-x-1/2 sm:rounded-[16px] data-[state=closed]:sm:zoom-out-95 data-[state=open]:sm:zoom-in-95"
         >
           <Dialog.Title className="sr-only">Buscar y navegar</Dialog.Title>
           <Command label="Paleta de comandos" className="flex flex-col">

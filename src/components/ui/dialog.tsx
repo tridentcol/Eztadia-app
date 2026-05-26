@@ -44,13 +44,17 @@ function DialogContent({
       <DialogOverlay />
       <RadixDialog.Content
         className={cn(
-          'border-border-default bg-surface text-text',
-          'fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2',
-          'w-[560px] max-w-[calc(100vw-32px)] max-h-[calc(100vh-64px)] overflow-y-auto',
-          'rounded-[16px] border p-6',
+          'border-border-default bg-surface text-text fixed z-50 overflow-y-auto border',
+          // Mobile (<sm): full-screen sheet con safe-area inferior.
+          'inset-0 w-full max-w-none rounded-none p-5',
+          // Desktop (>=sm): modal centrado.
+          'sm:inset-auto sm:top-1/2 sm:left-1/2 sm:w-[560px] sm:max-w-[calc(100vw-32px)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[16px] sm:p-6',
+          'sm:max-h-[calc(100vh-64px)]',
           'data-[state=open]:animate-in data-[state=closed]:animate-out',
           'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
-          'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
+          'data-[state=closed]:sm:zoom-out-95 data-[state=open]:sm:zoom-in-95',
+          'data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom',
+          'sm:data-[state=closed]:slide-out-to-bottom-0 sm:data-[state=open]:slide-in-from-bottom-0',
           className,
         )}
         {...props}

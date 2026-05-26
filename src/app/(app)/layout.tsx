@@ -1,7 +1,8 @@
 import { ViewTransition } from 'react'
 
 import { requireCurrentUser } from '@/lib/auth'
-import { Rail } from '@/components/app/rail'
+import { Sidebar } from '@/components/app/sidebar'
+import { MobileNav } from '@/components/app/mobile-nav'
 import { Topbar } from '@/components/app/topbar'
 import { CommandPalette } from '@/components/app/command-palette'
 import { NewAccountDialog } from '@/components/app/new-account-dialog'
@@ -29,13 +30,14 @@ export default async function AppLayout({
 
   return (
     <div className="bg-background text-text min-h-svh">
-      <Rail />
-      <div className="pl-[56px]">
+      <Sidebar />
+      <div className="lg:pl-[240px]">
         <Topbar />
-        <main className="mx-auto w-full max-w-[1240px] px-8 py-10">
+        <main className="mx-auto w-full max-w-[1120px] px-4 pt-6 pb-[80px] sm:px-6 lg:px-8 lg:py-10 lg:pb-10">
           <ViewTransition name="app-content">{children}</ViewTransition>
         </main>
       </div>
+      <MobileNav />
       <CommandPalette />
       <NewAccountDialog />
       <NewTransactionDialog

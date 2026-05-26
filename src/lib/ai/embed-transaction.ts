@@ -46,16 +46,22 @@ export function buildEmbeddingInput(
 export async function embedTransaction(
   description: string,
   merchant: string | null,
+  options: { userId?: string } = {},
 ): Promise<number[] | null> {
-  const provider = getOpenAI()
+  const provider = await getOpenAI({ userId: options.userId, scope: 'embed' })
   if (!provider) return null
   const input = buildEmbeddingInput(description, merchant)
   if (!input) return null
-  const { embedding } = await embed({
-    model: provider.textEmbedding(EMBEDDING_MODEL),
-    value: input,
-  })
-  return embedding
+  try {
+    const { embedding } = await embed({
+      model: provider.textEmbedding(EMBEDDING_MODEL),
+      value: input,
+    })
+    return embedding
+  } catch (err) {
+    console.error('[embed] falló:', err)
+    return null
+  }
 }
 
 /**

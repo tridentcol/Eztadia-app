@@ -139,7 +139,7 @@ async function buildSnapshot(ctx: InsightContext): Promise<Snapshot> {
 export async function generateRecommendations(
   ctx: InsightContext,
 ): Promise<DetectedInsight[]> {
-  const provider = getAnthropic()
+  const provider = await getAnthropic({ userId: ctx.userId })
   if (!provider) return []
   const snapshot = await buildSnapshot(ctx)
   if (snapshot.monthly.length === 0 && snapshot.topCategories.length === 0) {

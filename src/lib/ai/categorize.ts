@@ -12,6 +12,7 @@ import {
   embedTransaction,
   toPgvectorLiteral,
 } from './embed-transaction'
+import { findMerchantRule } from '@/lib/heuristic/merchants'
 
 /**
  * Umbrales:
@@ -21,20 +22,46 @@ import {
  *  - KNN_AVG_MIN: el bucket ganador del top-5 debe promediar > 0.60 para
  *    aceptar sin LLM.
  *  - LLM_MIN: el modelo debe reportar >= 0.55 para que aceptemos la sugerencia.
+ *  - MERCHANT_CONFIDENCE: confidence asignada cuando la regla de merchants
+ *    matchea. Determinista, así que la fijamos en 0.7 — alta pero no top.
  */
 const TOP1_THRESHOLD = 0.85
 const KNN_AVG_MIN = 0.6
 const LLM_MIN = 0.55
 const KNN_LIMIT = 5
+const MERCHANT_CONFIDENCE = 0.7
 
 export type CategorySuggestion = {
   categoryId: string
   confidence: number
-  source: 'knn' | 'llm' | 'top1'
+  source: 'knn' | 'llm' | 'top1' | 'merchant'
   /** Top-3 alternativas con su confidence — usadas por la UI de override. */
   alternatives: Array<{ categoryId: string; confidence: number }>
   /** Embedding generado (para persistirlo junto al row). null si no aplica. */
   embedding: number[] | null
+}
+
+/**
+ * Busca categoría sistema por nombre exacto. Usado por el fallback de
+ * merchants heurísticos.
+ */
+async function findSystemCategoryId(
+  name: string,
+  kind: 'income' | 'expense',
+): Promise<string | null> {
+  const [row] = await db
+    .select({ id: categories.id })
+    .from(categories)
+    .where(
+      and(
+        eq(categories.name, name),
+        eq(categories.kind, kind),
+        isNull(categories.userId),
+        eq(categories.archived, false),
+      ),
+    )
+    .limit(1)
+  return row?.id ?? null
 }
 
 type KnnRow = { category_id: string; similarity: number }
@@ -114,7 +141,7 @@ async function llmFallback(
   merchant: string | null,
   kind: 'income' | 'expense' | 'transfer',
 ): Promise<{ categoryId: string; confidence: number } | null> {
-  const provider = getAnthropic()
+  const provider = await getAnthropic({ userId })
   if (!provider) return null
   const eligible = await listEligibleCategories(userId, kind)
   if (eligible.length === 0) return null
@@ -166,7 +193,7 @@ export async function categorizeTransaction(params: {
   const { userId, description, merchant, kind } = params
   if (kind === 'transfer') return null
 
-  const embedding = await embedTransaction(description, merchant)
+  const embedding = await embedTransaction(description, merchant, { userId })
   if (embedding) {
     const knn = await fetchKnn(userId, embedding, kind)
     if (knn.length > 0) {
@@ -209,6 +236,24 @@ export async function categorizeTransaction(params: {
     }
   }
 
+  // Heurístico final por reglas de merchant (LATAM). Siempre disponible,
+  // sin LLM. Aporta cuando el usuario no tiene historia previa y no hay key.
+  // kind ya está narrowed a income|expense (el transfer return null arriba).
+  const composedText = `${description} ${merchant ?? ''}`.trim()
+  const rule = findMerchantRule(composedText, kind)
+  if (rule) {
+    const categoryId = await findSystemCategoryId(rule.category, rule.kind)
+    if (categoryId) {
+      return {
+        categoryId,
+        confidence: MERCHANT_CONFIDENCE,
+        source: 'merchant',
+        alternatives: [{ categoryId, confidence: MERCHANT_CONFIDENCE }],
+        embedding,
+      }
+    }
+  }
+
   // Sólo persistimos el embedding (sin categoría) para que futuras kNN tengan
   // este punto en el espacio vectorial — útil cuando el usuario lo categorice
   // manualmente.
@@ -237,8 +282,29 @@ export async function categorizeBatch(
   }>,
 ): Promise<Array<CategorySuggestion | null>> {
   if (items.length === 0) return []
-  const provider = getOpenAI()
-  if (!provider) return items.map(() => null)
+  const provider = await getOpenAI({ userId, scope: 'embed' })
+
+  // Si no hay provider (modo heurístico puro), aplicamos sólo merchant rules
+  // — rápido y determinista, sin embeddings.
+  if (!provider) {
+    return Promise.all(
+      items.map(async (it) => {
+        if (it.kind === 'transfer') return null
+        const composed = `${it.description} ${it.merchant ?? ''}`.trim()
+        const rule = findMerchantRule(composed, it.kind)
+        if (!rule) return null
+        const catId = await findSystemCategoryId(rule.category, rule.kind)
+        if (!catId) return null
+        return {
+          categoryId: catId,
+          confidence: MERCHANT_CONFIDENCE,
+          source: 'merchant' as const,
+          alternatives: [{ categoryId: catId, confidence: MERCHANT_CONFIDENCE }],
+          embedding: null,
+        }
+      }),
+    )
+  }
 
   const inputs = items.map((it) =>
     it.kind === 'transfer' ? null : buildEmbeddingInput(it.description, it.merchant),
@@ -307,12 +373,30 @@ export async function categorizeBatch(
         embedding,
       }
     } else {
-      out[idx] = {
-        categoryId: '',
-        confidence: 0,
-        source: 'knn',
-        alternatives,
-        embedding,
+      // kNN no alcanza umbral — probamos merchant rules antes de dejarlo vacío.
+      // (item.kind ya está narrowed: el continue de transfer está arriba.)
+      const composed = `${item.description} ${item.merchant ?? ''}`.trim()
+      const rule = findMerchantRule(composed, item.kind)
+      let merchantCatId: string | null = null
+      if (rule) {
+        merchantCatId = await findSystemCategoryId(rule.category, rule.kind)
+      }
+      if (merchantCatId) {
+        out[idx] = {
+          categoryId: merchantCatId,
+          confidence: MERCHANT_CONFIDENCE,
+          source: 'merchant',
+          alternatives: [{ categoryId: merchantCatId, confidence: MERCHANT_CONFIDENCE }],
+          embedding,
+        }
+      } else {
+        out[idx] = {
+          categoryId: '',
+          confidence: 0,
+          source: 'knn',
+          alternatives,
+          embedding,
+        }
       }
     }
   }
