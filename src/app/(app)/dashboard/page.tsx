@@ -11,9 +11,11 @@ import {
 } from '@/lib/db/queries/accounts'
 import { listTransactionsForUser } from '@/lib/db/queries/transactions'
 import { listBudgetsWithProgress } from '@/lib/db/queries/budgets'
+import { listUnreadInsights } from '@/lib/db/queries/insights'
 import { Amount } from '@/components/app/amount'
 import { BudgetProgressCard } from '@/components/app/budget-progress'
 import { EmptyState } from '@/components/app/empty-state'
+import { InsightCard } from '@/components/app/insight-card'
 import { NewAccountTrigger } from '@/components/app/new-account-trigger'
 import { NewTransactionTrigger } from '@/components/app/new-transaction-trigger'
 import type { CurrencyCode } from '@/lib/currency/currencies'
@@ -34,11 +36,12 @@ export default async function DashboardPage() {
     where: eq(profiles.userId, user.id),
   })
   const baseCurrency = (profile?.baseCurrency ?? 'COP') as CurrencyCode
-  const [accountsList, totalSnapshot, recent, budgets] = await Promise.all([
+  const [accountsList, totalSnapshot, recent, budgets, unreadInsights] = await Promise.all([
     listAccountsWithBalance(user.id),
     getTotalBalanceInBase(user.id, baseCurrency),
     listTransactionsForUser(user.id, { limit: 5 }),
     listBudgetsWithProgress(user.id),
+    listUnreadInsights(user.id, 3),
   ])
   const totalBase = totalSnapshot.total
 
@@ -164,6 +167,29 @@ export default async function DashboardPage() {
               </ul>
             )}
           </section>
+
+          {unreadInsights.length > 0 && (
+            <section className="flex flex-col gap-4">
+              <header className="flex items-baseline justify-between">
+                <h2 className="text-text text-sm font-semibold">
+                  Lecturas recientes
+                </h2>
+                <Link
+                  href="/insights"
+                  className="text-text-secondary hover:text-text text-[13px] transition-colors"
+                >
+                  Ver todas
+                </Link>
+              </header>
+              <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                {unreadInsights.map((insight) => (
+                  <li key={insight.id}>
+                    <InsightCard insight={insight} compact />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           {featuredBudgets.length > 0 && (
             <section className="flex flex-col gap-4">

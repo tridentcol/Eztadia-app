@@ -3,7 +3,7 @@
 > Archivo vivo. **Actualízalo al cerrar cada step o al tomar una decisión que afecte el rumbo.**
 > El builder lo lee al inicio de cada sesión para no perder continuidad.
 >
-> Última actualización: 2026-05-26 — Step 9 ✅. Pipeline IA operativo: `src/lib/ai/{openai,anthropic,embed-transaction,categorize}.ts`. text-embedding-3-small + pgvector HNSW kNN sobre transactions del mismo usuario + mismo kind; fallback few-shot a Claude Sonnet 4.6 vía AI SDK `generateObject`. Hookeado en `createTransaction` (inline single) y `runImport` (`categorizeBatch` con `embedMany`). UI: `CategoryCell` editable en `/transacciones` (sparkle `accent-ai` + override que marca `user_corrected=true`); `RecategorizeButton` corre `bulkRecategorize` server action sobre pending count. Degradación grácil sin `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` (UI muestra mensaje). **Pendiente**: Step 10 (insights engine + cron) → 11 (copiloto) → 12 (metas, recurring, alertas, deploy prod). Para activar IA en prod: pegar `OPENAI_API_KEY` + `ANTHROPIC_API_KEY` en `.env.local` y en Vercel.
+> Última actualización: 2026-05-26 — Step 10 ✅. Insights engine + cron diario. 4 detectores en `src/lib/ai/insights/`: anomaly (z-score semanal por categoría vs baseline 8 semanas), trend (pendiente 3 meses cerrados con umbral 15%), forecast (proyección vs presupuesto monthly con umbral 10/30%), y recommendation (Claude Sonnet 4.6 con snapshot estructurado, schema Zod). Runner dedupea por `data.signature` en ventana de 24h. Cron `/api/cron/insights` en `vercel.json` (`0 5 * * *`). UI: `/insights` con filtros por kind + `InsightCard` (severity dot tonal, sparkle para AI, dismiss/acted), sección "Lecturas recientes" en dashboard con top 3 unread + `RunInsightsButton` para disparo manual. **Pendiente**: Step 11 (copiloto Cmd+K con tool-calling) → 12 (metas, recurring, alertas, deploy prod).
 
 ---
 
@@ -21,7 +21,7 @@
 | 8 | Import CSV con mapping inteligente | ✅ hecho | Helpers `infer-columns` (heurística regex ES/EN) + `parse-row` (fecha ISO/DD-MM-YYYY, monto LATAM/EU, kind signed o split columns). Server action `runImport` crea batch, parsea, inserta en chunks de 200, marca status. `/importar/page.tsx` server component con `ImporterClient` (drop zone, mapping UI inferido, preview, headerRow ajustable) + sección "Imports recientes" con tabla. Cmd+K acción "Importar CSV" navega a `/importar`. Rail tiene item con icono `upload`. amount_base = amount_original 1:1 mock hasta Step 8b. |
 | 8b | Tasas reales + cross-currency transfers | ✅ hecho | `src/lib/currency/rates.ts` (fetchDailyRates open.er-api.com, upsertRates onConflict, getRate con fallback al último ≤ fecha, convertAmount). Cron `/api/cron/exchange-rates` GET protegido por `Authorization: Bearer ${CRON_SECRET}`. `vercel.json` re-añadido con SOLO `crons` (0 6 * * *). Schema: columna `transfer_group_id uuid` + index. `createTransaction` ahora ramifica: same-currency = una fila, cross-currency = dos filas espejo con `transferGroupId` compartido (origen lleva `transferAccountId`, destino lleva `null` → CTE las maneja). `runImport` usa `convertAmount` por fila con cache por fecha. Dashboard convierte el balance de cada cuenta a base via `getRate`. Script `pnpm rates:fetch` para llenar tabla manualmente y backfillear txs con tasa mock. |
 | 9 | Auto-categorización con IA + embeddings | ✅ hecho | `src/lib/ai/openai.ts` (cliente lazy, text-embedding-3-small, 1536 dim) + `src/lib/ai/anthropic.ts` (claude-sonnet-4-6). `embed-transaction.ts` normaliza texto (lower + NFD + strip bank prefixes/refs largas) y devuelve `number[1536]`. `categorize.ts`: kNN via pgvector `<=>` (top-5, filtra por user_id + kind), umbrales TOP1=0.85 / KNN_AVG=0.60; fallback `generateObject` con esquema Zod a Claude Sonnet 4.6 (umbral 0.55). `categorizeBatch` para imports usa `embedMany` (1 round-trip) y NO usa LLM. `recategorizeUnclassified(userId, {limit})` re-corre pending. Hooks: `createTransaction` (inline si no hay categoryId del usuario), `runImport` (batch antes del insert), action `setTransactionCategory` (re-embed + user_corrected=true). UI: `CategoryCell` (Radix Select inline en la tabla + sparkle accent-ai + tooltip de confidence) + `RecategorizeButton` (server action bulkRecategorize, muestra count pending en header). Degradación grácil sin keys (return null + toast informativo). |
-| 10 | Insights engine + cron diario | ⏳ pendiente | |
+| 10 | Insights engine + cron diario | ✅ hecho | `src/lib/ai/insights/{anomaly,trend,forecast,recommendation}.ts` + `index.ts` runner. anomaly: z-score >= 2σ sobre total semanal vs 8 semanas baseline; trend: |Δ%| >= 15% entre primer/último mes cerrado (top-8 cats); forecast: spend_rate × dias_totales > 1.1 × budget (solo monthly, dias_elapsed >= 5); recommendation: Claude Sonnet 4.6 `generateObject` con snapshot agregado (no transacciones individuales). Dedupe por `data.signature` en ventana 24h. Cron `/api/cron/insights` (`0 5 * * *`) en `vercel.json`, GET protegido por `CRON_SECRET`, itera `getActiveUserIds()` (txs últimos 60d). UI: `/insights/page.tsx` con filtros por kind + `InsightCard` (severity dot tonal, sparkle accent-ai si AI, botón acción → href derivado del JSON `action`, dismiss + mark-acted). Server actions `dismissInsight` / `markInsightActed` / `markInsightRead` / `runInsightsNow`. Sección "Lecturas recientes" en dashboard con top 3 unread + `RunInsightsButton`. |
 | 11 | Copiloto Finanzia con tool-calling | ⏳ pendiente | |
 | 12 | Metas, recurring, tarjetas, alertas, deploy | ⏳ pendiente | |
 
@@ -29,23 +29,30 @@
 
 ## Next action
 
-**Step 10 — Insights engine + cron diario.**
+**Step 11 — Copiloto Finanzia con tool-calling.**
 
-El usuario empieza a ver el sistema "pensar" sobre sus datos. Cada noche un cron analiza el historial y genera 0..N tarjetas de insight que se persisten en `insights` (tabla ya existe) y aparecen en `/insights` y en el dashboard.
+Activar la sección IA del Cmd+K (`Preguntar a Finanzia`) que hasta ahora estaba como `próximamente`. El copiloto entiende texto libre del usuario y puede:
+
+1. **Consultar datos** vía tools (read-only): saldo, gasto por categoría/período, próximos vencimientos, presupuestos en riesgo, insights pendientes.
+2. **Proponer mutaciones** (no ejecutarlas directo — regla 6 del mandato): crear transacción, ajustar presupuesto, crear meta. El LLM devuelve la propuesta como tool call que la UI presenta como tarjeta de confirmación; el usuario aprueba → se ejecuta la server action.
+3. **Streaming** via `streamText` del AI SDK; la UI muestra tokens entrantes en vivo, con tarjetas para tool-results entre líneas.
 
 Por hacer:
 
-1. **Detectores** en `src/lib/ai/insights/`:
-   - `anomaly-detector.ts` — z-score (>2σ) sobre el gasto diario por categoría vs su histórico de 60 días. Genera tarjetas tipo "Gastaste 3x más en Restaurantes esta semana".
-   - `trend-detector.ts` — pendiente positiva/negativa de gasto mensual por categoría top-5 últimos 3 meses. "Tu gasto en Suscripciones subió 18% en 3 meses".
-   - `forecast.ts` — proyección simple del mes (gasto-a-fecha / días-transcurridos × días-mes) vs presupuesto activo.
-   - `recommendation.ts` — vía Claude Sonnet 4.6: pasa al LLM el resumen del mes + categorías + presupuestos, pide 1-2 sugerencias accionables. Tool-calling NO necesario aquí — solo texto estructurado con schema Zod.
-2. **Cron** `src/app/api/cron/insights/route.ts` protegido por `CRON_SECRET`. Itera por cada usuario activo y corre los detectores, escribe en `insights`. Agrega entrada al `vercel.json` (`0 5 * * *` por ejemplo, antes del cron de rates).
-3. **`/insights/page.tsx`** — lista filterable por kind/severity. Cada insight es una `InsightCard` (acción primaria que el `action` JSON dicte: ej. "Ajustar presupuesto", "Ver transacciones").
-4. **Dashboard**: sección "Insights recientes" con top 3 unread.
-5. **Acciones**: dismiss / mark-acted server actions que actualizan `status`.
+1. `src/lib/ai/copilot/tools/` — un archivo por tool:
+   - `get-balance.ts`, `list-recent-transactions.ts`, `get-budget-status.ts`, `list-active-insights.ts`, `search-transactions.ts` (read).
+   - `propose-create-transaction.ts`, `propose-set-budget.ts` (writes que devuelven propuesta).
+2. `src/lib/ai/copilot/index.ts` — `buildChatRoute()` con `streamText`, system prompt + tools.
+3. `src/app/api/ai/chat/route.ts` — POST endpoint que recibe `messages` y devuelve un Response streaming.
+4. Cliente: convertir el placeholder del Cmd+K en una conversación real con `useChat` (AI SDK React). Mostrar tool calls como cards.
+5. Persistir conversaciones en `conversations` + `messages` (schema existe).
 
-Después: Step 11 (copiloto Cmd+K con tool-calling real) → Step 12 (metas, recurring, alertas, deploy prod).
+Después: Step 12 (metas, recurring, tarjetas, alertas, deploy prod final).
+
+**Operacional Step 10**:
+- El cron corre `0 5 * * *` UTC en Vercel. Primera ejecución mañana. Para validar ahora: abre `/insights` → "Analizar ahora" (server action `runInsightsNow`), o hit el endpoint con `curl -H "Authorization: Bearer $CRON_SECRET" https://finanzia-app-six.vercel.app/api/cron/insights`.
+- Insights LLM (recommendation kind) requieren `ANTHROPIC_API_KEY` pegada en Vercel. Sin key, solo se generan anomaly/trend/forecast.
+- Los detectores SQL son sensibles a tener volumen de datos: anomaly necesita >=4 semanas previas; trend >=2 meses cerrados; forecast cualquier presupuesto monthly con >=5 días elapsed.
 
 **Operacional Step 9**:
 - Pegar `OPENAI_API_KEY` y `ANTHROPIC_API_KEY` en `.env.local` y en Vercel (production + preview).
@@ -53,10 +60,6 @@ Después: Step 11 (copiloto Cmd+K con tool-calling real) → Step 12 (metas, rec
 - Tras unas decenas de transacciones, las nuevas se categorizan via kNN sin tocar el LLM (más rápido y barato).
 
 **Smoke test pendiente** (no bloquea): probar import con CSV real de banco LATAM y confirmar heurísticas.
-
-**Operacional Step 8b**:
-- Tras este deploy: setear `vercel env add EXCHANGE_RATE_API_KEY production "" --value "" --yes --force` queda igual (vacío opcional). El provider open.er-api.com no requiere key.
-- Vercel ejecutará `0 6 * * *` automáticamente — la primera invocación poblará `exchange_rates`. Para acelerar, correr `pnpm rates:fetch` localmente (consume `DIRECT_URL` con password) o `curl -H "Authorization: Bearer $CRON_SECRET" https://finanzia-app-six.vercel.app/api/cron/exchange-rates`.
 
 ---
 
@@ -300,6 +303,10 @@ feat(auth): wire clerk + third-party auth supabase
 | **CategoryCell editable inline con Radix Select** | Patrón Linear / Notion: la celda ES el control. Click → dropdown. Sin modales para algo tan común. Cuando el usuario cambia, `user_corrected = true` y `ai_categorized = false` — la señal sirve para futuras predicciones (kNN aprende del corrected). |
 | **Sentinel `__unset__` para "sin categoría" en Select** | Radix Select rechaza `value=""` (lo trata como uncontrolled). Sentinel string convertido a `null` en el onChange. Patrón replicable. |
 | **`embedding` persistido aunque la categoría quede null** | Si el usuario crea una tx sin categoría y la IA no llega a confianza, guardamos el embedding igual. Cuando él la categorice manualmente o cuando haya más historia, esa fila contribuye como vecino kNN sin re-embeddear. |
+| **Dedupe de insights via `data.signature`** | El cron puede correr varias veces al día (operador, reintento). Cada detector emite una `signature` determinista (ej. `anomaly:<categoryId>:<weekStart>`). El runner consulta insights del usuario en ventana de 24h y skipea si la signature ya existe. Permite re-correr sin spammear al usuario y mantiene `data.signature` consultable a futuro (e.g., generar un cliente que clasifique notificaciones). |
+| **Detectores son SQL puro, LLM SOLO en `recommendation`** | Reduce costo y latencia. Las anomalías, tendencias y forecasts son determinísticas y reproducibles — el LLM aporta cuando hace falta razonamiento sobre el snapshot agregado del usuario. Si se cae el provider AI, solo `recommendation` deja de funcionar; el resto sigue. |
+| **Recommendation no ve transacciones individuales** | Le pasamos solo agregados (totales mensuales por kind, top categorías expense, status de presupuestos) — JSON estructurado. Minimiza tokens (~500 prompt en typical case) y evita leak de descripciones sensibles. La salida es Zod-validada vía `generateObject` (no parseo manual de JSON). |
+| **InsightCard con asChild en Button para Link** | El "Abrir" del card usa `<Button asChild variant="outline">` envolviendo un `<Link>` — patrón shadcn/Radix `Slot`. Mantiene el styling Noir del Button y deja Next manejar la navegación con prefetch. El onClick del Link dispara `markInsightActed` antes de navegar. |
 
 ---
 
@@ -328,7 +335,9 @@ feat(auth): wire clerk + third-party auth supabase
 - **Clerk URLs por env var**: `NEXT_PUBLIC_CLERK_SIGN_IN_URL`, `NEXT_PUBLIC_CLERK_SIGN_UP_URL`, `*_FALLBACK_REDIRECT_URL`. Ya están en `.env.local`. Si cambian, también hay que tocarlos en el dashboard de Clerk (Paths) para que coincidan.
 - **Vercel Cron auth**: Vercel Cron sólo invoca con GET y agrega `Authorization: Bearer ${CRON_SECRET}` SI la env var `CRON_SECRET` existe en el project (ya está). El handler valida y devuelve 401 si no coincide. Para invocar manualmente desde dev: `curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/exchange-rates`.
 - **pgvector kNN parameter binding**: el operador `<=>` requiere el vector como literal `'[a,b,c]'::vector`, NO como array de drizzle/postgres-js. Helper `toPgvectorLiteral(vec)` convierte. Si pasas el array directo, postgres rechaza con "could not determine data type of parameter $N". El cast `::vector` después del literal es obligatorio.
-- **AI SDK `embed`/`embedMany` API**: en `@ai-sdk/openai@3.x` el modelo se obtiene con `provider.textEmbedding('text-embedding-3-small')`, NO `provider.embedding(...)` (legacy). Retorna `{ embedding }` o `{ embeddings }` arrays de `number[]`. Si el provider no tiene API key, throw — por eso el cliente está en lazy guard y se devuelve `null` cuando falta. 
+- **AI SDK `embed`/`embedMany` API**: en `@ai-sdk/openai@3.x` el modelo se obtiene con `provider.textEmbedding('text-embedding-3-small')`, NO `provider.embedding(...)` (legacy). Retorna `{ embedding }` o `{ embeddings }` arrays de `number[]`. Si el provider no tiene API key, throw — por eso el cliente está en lazy guard y se devuelve `null` cuando falta.
+- **Drizzle `inArray` con enums**: la sobrecarga estricta de `inArray(column, values)` exige que el array literal coincida con el tipo del enum, NO `string[]`. Si pasas un `as const` con cast a `string[]`, falla con "Type 'string' is not assignable to type". Solución: pasar directamente el array literal `['unread', 'read', 'acted']` — TypeScript narrowea al tipo enum automáticamente. Bug encontrado en `listInsightsForUser` durante Step 10.
+- **Cron stacking en `vercel.json`**: cada cron entry corre independientemente. Si dos crons usan `0 X * * *` cercanos (ej. `0 5` y `0 6`), Vercel los serializa por proyecto, no en paralelo, así que no hay problema de race. Pero asegurate de que cada cron NO dependa del output del otro — son idempotentes. 
 - **`open.er-api.com` rate limits**: free tier sin key, ~1500 req/mes según docs. Diario × 30 = 30 reqs/mes; sobra. Si el cron se vuelve loco (loops humanos manuales), upsert es idempotente — no hay daño. La respuesta es base USD; los pairs from→to se derivan dividiendo (USD→to)/(USD→from).
 - **Cross-currency transfer listing**: las dos filas espejo aparecen como dos rows separados en `/transacciones` y `/dashboard recent`. El origen muestra "src → dst" (tiene `transferAccountId`); el destino se renderiza sin flecha (`transferAccountId IS NULL`). Convivible pero perfectible — un fold opcional en el listing es candidato para una pasada futura.
 - **`vercel.json` reintroducido**: sólo con `crons`, intencionalmente sin `headers` ni `routes` (esos viven en `next.config.ts`). El bug histórico de "Vercel servía binario" NO fue `vercel.json`; fue env vars vacías. Mantenerlo minimalista evita re-tropezar.
