@@ -7,6 +7,7 @@ import { Dialog } from 'radix-ui'
 
 import { icons } from '@/lib/design/icons'
 import { useCommandStore } from './command-store'
+import { useDialogStore } from './dialog-store'
 
 type NavItem = {
   label: string
@@ -31,6 +32,7 @@ export function CommandPalette() {
   const open = useCommandStore((s) => s.open)
   const setOpen = useCommandStore((s) => s.setOpen)
   const toggle = useCommandStore((s) => s.toggle)
+  const openDialog = useDialogStore((s) => s.open)
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -48,7 +50,15 @@ export function CommandPalette() {
     router.push(href)
   }
 
+  function runOpenDialog(id: 'new-account' | 'new-transaction') {
+    setOpen(false)
+    // Pequeño delay para que el cierre del cmdk no compita con la apertura del dialog.
+    setTimeout(() => openDialog(id), 50)
+  }
+
   const Ai = icons.sparkles
+  const Plus = icons.plus
+  const Wallet = icons.wallet
 
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
@@ -77,6 +87,30 @@ export function CommandPalette() {
               <Command.Empty className="text-text-tertiary px-4 py-8 text-center text-sm">
                 Sin resultados.
               </Command.Empty>
+
+              <Command.Group
+                heading="Acciones"
+                className="[&_[cmdk-group-heading]]:text-text-tertiary [&_[cmdk-group-heading]]:px-4 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-[0.08em]"
+              >
+                <Command.Item
+                  value="Nueva transacción registrar movimiento"
+                  onSelect={() => runOpenDialog('new-transaction')}
+                  className="text-text-secondary aria-selected:bg-surface-hover aria-selected:text-text mx-2 flex h-9 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors"
+                >
+                  <Plus strokeWidth={1.5} className="h-[15px] w-[15px]" />
+                  <span className="flex-1">Nueva transacción</span>
+                  <span className="text-text-tertiary text-[11px] tracking-wider">N T</span>
+                </Command.Item>
+                <Command.Item
+                  value="Nueva cuenta agregar"
+                  onSelect={() => runOpenDialog('new-account')}
+                  className="text-text-secondary aria-selected:bg-surface-hover aria-selected:text-text mx-2 flex h-9 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors"
+                >
+                  <Wallet strokeWidth={1.5} className="h-[15px] w-[15px]" />
+                  <span className="flex-1">Nueva cuenta</span>
+                  <span className="text-text-tertiary text-[11px] tracking-wider">N C</span>
+                </Command.Item>
+              </Command.Group>
 
               <Command.Group
                 heading="Ir a"

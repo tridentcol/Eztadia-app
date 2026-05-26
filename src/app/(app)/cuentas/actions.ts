@@ -1,0 +1,122 @@
+'use server'
+
+import { z } from 'zod'
+import { revalidatePath } from 'next/cache'
+import { and, eq } from 'drizzle-orm'
+
+import { requireCurrentUser } from '@/lib/auth'
+import { db } from '@/lib/db/client'
+import { accounts } from '@/lib/db/schema'
+import { currencyCodes } from '@/lib/currency/currencies'
+
+const accountTypeValues = [
+  'checking',
+  'savings',
+  'credit_card',
+  'cash',
+  'investment',
+  'crypto',
+  'other',
+] as const
+
+const createAccountSchema = z
+  .object({
+    name: z.string().trim().min(1, 'Requerido').max(80, 'Máx 80 caracteres'),
+    type: z.enum(accountTypeValues),
+    currency: z.enum(currencyCodes as [string, ...string[]]),
+    initialBalance: z
+      .string()
+      .regex(/^-?\d+(\.\d{1,2})?$/, 'Formato inválido (ej. 1000.00)'),
+    creditLimit: z
+      .string()
+      .regex(/^\d+(\.\d{1,2})?$/, 'Formato inválido')
+      .optional()
+      .nullable(),
+    statementDay: z.number().int().min(1).max(31).optional().nullable(),
+    paymentDay: z.number().int().min(1).max(31).optional().nullable(),
+    color: z
+      .string()
+      .regex(/^#[0-9A-Fa-f]{6}$/, 'Hex inválido')
+      .optional()
+      .nullable(),
+    icon: z.string().min(1).max(40).optional().nullable(),
+  })
+  .superRefine((val, ctx) => {
+    if (val.type !== 'credit_card') return
+    if (!val.creditLimit) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['creditLimit'],
+        message: 'Requerido para tarjeta de crédito',
+      })
+    }
+  })
+
+export type CreateAccountInput = z.input<typeof createAccountSchema>
+
+export type ActionResult<T = void> =
+  | { ok: true; data: T }
+  | { ok: false; error: { code: string; message: string; fields?: Record<string, string> } }
+
+export async function createAccount(
+  input: CreateAccountInput,
+): Promise<ActionResult<{ id: string }>> {
+  const user = await requireCurrentUser()
+
+  const parsed = createAccountSchema.safeParse(input)
+  if (!parsed.success) {
+    const fields: Record<string, string> = {}
+    for (const issue of parsed.error.issues) {
+      const key = issue.path.join('.')
+      if (key) fields[key] = issue.message
+    }
+    return {
+      ok: false,
+      error: { code: 'validation', message: 'Revisa los campos.', fields },
+    }
+  }
+
+  const data = parsed.data
+  const [row] = await db
+    .insert(accounts)
+    .values({
+      userId: user.id,
+      name: data.name,
+      type: data.type,
+      currency: data.currency,
+      initialBalance: data.initialBalance,
+      creditLimit: data.type === 'credit_card' ? (data.creditLimit ?? null) : null,
+      statementDay: data.type === 'credit_card' ? (data.statementDay ?? null) : null,
+      paymentDay: data.type === 'credit_card' ? (data.paymentDay ?? null) : null,
+      color: data.color ?? null,
+      icon: data.icon ?? null,
+    })
+    .returning({ id: accounts.id })
+
+  if (!row) {
+    return {
+      ok: false,
+      error: { code: 'insert_failed', message: 'No se pudo crear la cuenta.' },
+    }
+  }
+
+  revalidatePath('/cuentas')
+  revalidatePath('/dashboard')
+  return { ok: true, data: { id: row.id } }
+}
+
+export async function archiveAccount(id: string): Promise<ActionResult> {
+  const user = await requireCurrentUser()
+  if (!z.string().uuid().safeParse(id).success) {
+    return { ok: false, error: { code: 'invalid_id', message: 'ID inválido.' } }
+  }
+
+  await db
+    .update(accounts)
+    .set({ archived: true, updatedAt: new Date() })
+    .where(and(eq(accounts.id, id), eq(accounts.userId, user.id)))
+
+  revalidatePath('/cuentas')
+  revalidatePath('/dashboard')
+  return { ok: true, data: undefined }
+}

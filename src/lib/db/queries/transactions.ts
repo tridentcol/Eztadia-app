@@ -1,0 +1,148 @@
+import 'server-only'
+import { and, desc, eq, gte, isNull, lte, sql } from 'drizzle-orm'
+
+import { db } from '@/lib/db/client'
+import { accounts, categories, transactions } from '@/lib/db/schema'
+import type { CurrencyCode } from '@/lib/currency/currencies'
+
+export type TransactionListItem = {
+  id: string
+  date: string
+  description: string
+  merchant: string | null
+  notes: string | null
+  kind: 'income' | 'expense' | 'transfer'
+  amountOriginal: string
+  currency: CurrencyCode
+  amountBase: string
+  account: { id: string; name: string }
+  transferAccount: { id: string; name: string } | null
+  category: { id: string; name: string; color: string | null; icon: string | null } | null
+  aiCategorized: boolean
+  aiConfidence: string | null
+}
+
+export type TransactionFilters = {
+  kind?: 'income' | 'expense' | 'transfer'
+  accountId?: string
+  categoryId?: string
+  /** YYYY-MM-DD */
+  from?: string
+  /** YYYY-MM-DD */
+  to?: string
+  limit?: number
+}
+
+export async function listTransactionsForUser(
+  userId: string,
+  filters: TransactionFilters = {},
+): Promise<TransactionListItem[]> {
+  const limit = filters.limit ?? 50
+  const transferAccounts = sql`xfer`.as('xfer')
+
+  const conditions = [
+    eq(transactions.userId, userId),
+    isNull(transactions.deletedAt),
+  ]
+  if (filters.kind) conditions.push(eq(transactions.kind, filters.kind))
+  if (filters.accountId) conditions.push(eq(transactions.accountId, filters.accountId))
+  if (filters.categoryId) conditions.push(eq(transactions.categoryId, filters.categoryId))
+  if (filters.from) conditions.push(gte(transactions.date, filters.from))
+  if (filters.to) conditions.push(lte(transactions.date, filters.to))
+
+  const rows = await db
+    .select({
+      id: transactions.id,
+      date: transactions.date,
+      description: transactions.description,
+      merchant: transactions.merchant,
+      notes: transactions.notes,
+      kind: transactions.kind,
+      amountOriginal: transactions.amountOriginal,
+      currency: transactions.currency,
+      amountBase: transactions.amountBase,
+      aiCategorized: transactions.aiCategorized,
+      aiConfidence: transactions.aiConfidence,
+      accountId: transactions.accountId,
+      accountName: accounts.name,
+      transferAccountId: transactions.transferAccountId,
+      transferAccountName: sql<string | null>`${transferAccounts}.name`,
+      categoryId: transactions.categoryId,
+      categoryName: categories.name,
+      categoryColor: categories.color,
+      categoryIcon: categories.icon,
+    })
+    .from(transactions)
+    .leftJoin(accounts, eq(accounts.id, transactions.accountId))
+    .leftJoin(
+      sql`accounts ${transferAccounts}`,
+      sql`${transferAccounts}.id = ${transactions.transferAccountId}`,
+    )
+    .leftJoin(categories, eq(categories.id, transactions.categoryId))
+    .where(and(...conditions))
+    .orderBy(desc(transactions.date), desc(transactions.createdAt))
+    .limit(limit)
+
+  return rows.map((r) => ({
+    id: r.id,
+    date: r.date,
+    description: r.description,
+    merchant: r.merchant,
+    notes: r.notes,
+    kind: r.kind,
+    amountOriginal: r.amountOriginal,
+    currency: r.currency as CurrencyCode,
+    amountBase: r.amountBase,
+    account: { id: r.accountId, name: r.accountName ?? '—' },
+    transferAccount: r.transferAccountId
+      ? { id: r.transferAccountId, name: r.transferAccountName ?? '—' }
+      : null,
+    category: r.categoryId
+      ? {
+          id: r.categoryId,
+          name: r.categoryName ?? '—',
+          color: r.categoryColor,
+          icon: r.categoryIcon,
+        }
+      : null,
+    aiCategorized: r.aiCategorized,
+    aiConfidence: r.aiConfidence,
+  }))
+}
+
+/**
+ * Categorías visibles para el usuario: sistema (user_id null) + propias.
+ * Para uso en pickers de transacción.
+ */
+export async function listAvailableCategories(userId: string) {
+  return db
+    .select({
+      id: categories.id,
+      name: categories.name,
+      kind: categories.kind,
+      parentId: categories.parentId,
+      icon: categories.icon,
+      color: categories.color,
+    })
+    .from(categories)
+    .where(
+      and(
+        eq(categories.archived, false),
+        sql`(${categories.userId} IS NULL OR ${categories.userId} = ${userId})`,
+      ),
+    )
+    .orderBy(categories.kind, categories.sortOrder)
+}
+
+export async function listUserAccountsBasic(userId: string) {
+  return db
+    .select({
+      id: accounts.id,
+      name: accounts.name,
+      currency: accounts.currency,
+      type: accounts.type,
+    })
+    .from(accounts)
+    .where(and(eq(accounts.userId, userId), eq(accounts.archived, false)))
+    .orderBy(accounts.createdAt)
+}

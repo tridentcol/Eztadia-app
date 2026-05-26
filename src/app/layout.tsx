@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter, Geist_Mono, Fraunces } from 'next/font/google'
 import { ClerkProvider } from '@clerk/nextjs'
 import { esES } from '@clerk/localizations'
+import { Toaster } from 'sonner'
 
 import './globals.css'
 import { clerkAppearance } from '@/lib/clerk-appearance'
@@ -51,6 +52,17 @@ export default function RootLayout({
         <ClerkProvider appearance={clerkAppearance} localization={esES}>
           {children}
         </ClerkProvider>
+        <Toaster
+          theme="dark"
+          position="bottom-right"
+          toastOptions={{
+            classNames: {
+              toast:
+                'border-border-default bg-surface-elevated text-text rounded-[12px] border shadow-none',
+              description: 'text-text-secondary',
+            },
+          }}
+        />
       </body>
     </html>
   )

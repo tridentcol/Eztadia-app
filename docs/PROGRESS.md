@@ -3,7 +3,7 @@
 > Archivo vivo. **Actualízalo al cerrar cada step o al tomar una decisión que afecte el rumbo.**
 > El builder lo lee al inicio de cada sesión para no perder continuidad.
 >
-> Última actualización: 2026-05-26 — Step 5 cerrado: shell (app) con Rail 56px + Topbar 56px + Cmd+K palette (cmdk + radix Dialog) + View Transitions (rail-indicator, app-content). 7 páginas placeholder con empty states editoriales. Próximo: Step 6 (CRUD cuentas + transacciones manual).
+> Última actualización: 2026-05-26 — Step 6 cerrado: CRUD de cuentas + transacciones manual end-to-end. UI base Noir (Button, Input, Select, Dialog, Field, Textarea, Label). Currency helpers + componente Amount. Saldo computado por cuenta + saldo total agregado. Próximo: Step 7 (categorías custom + presupuestos).
 
 ---
 
@@ -16,7 +16,7 @@
 | 3 | Auth — Clerk + Third-Party Auth Supabase | ✅ hecho | Clerk con Sign in with Apple. Integración Third-Party Auth verificada (`/api/auth-check` mostró `sub` correcto, `iss=https://natural-doberman-90.clerk.accounts.dev`, `role=authenticated`, RLS filtra 1 fila). Usuario semilla: `78f6tpjfw5@privaterelay.appleid.com` con profile default COP/es-CO/America/Bogota. Webhook secret aún no configurado (se hace cuando haya dominio público); el `getCurrentUser()` lazy upsert cubre el gap. |
 | 4 | Design system — tokens, fonts, theme | ✅ hecho | Tokens Noir hex en `globals.css` (light + dark). Fuentes: Inter (`--font-sans` con opsz axis), Geist Mono (`--font-mono`), Fraunces italic (`--font-editorial`). `src/lib/design/{tokens,icons}.ts` y `src/lib/motion/{easings,durations,variants}.ts`. `clerkAppearance` migrado a CSS vars. Clases utility: `.display`, `.editorial`, `.amount`. `prefers-reduced-motion` respetado. |
 | 5 | Layout principal — Rail + Cmd+K + View transitions | ✅ hecho | `Rail` 56px (client, usePathname para active state, tooltips CSS-only). `Topbar` 56px con breadcrumb + ghost button "Buscar ⌘K". `CommandPalette` con cmdk + radix Dialog: navegación + sección IA placeholder con `accent-ai`. Listener global Cmd+K via Zustand store. ViewTransitions activadas: `rail-indicator` (animación del active mark) y `app-content` (crossfade del main). Páginas placeholder en `(app)/{cuentas,transacciones,categorias,presupuestos,metas,insights,ajustes}` con `EmptyState` editorial (Fraunces italic + body Inter). `categorias` ya carga las 55 sembradas via Drizzle. |
-| 6 | CRUD cuentas + transacciones manual | ⏳ pendiente | |
+| 6 | CRUD cuentas + transacciones manual | ✅ hecho | UI base Noir en `src/components/ui/`. Helpers en `src/lib/currency/`. Server actions `createAccount`, `createTransaction`, `archiveAccount` con Zod + revalidatePath. Saldo computado vía CTE SQL (positive income, negative expense, transfers afectan ambos extremos). Página /cuentas con cards reales, /transacciones con tabla + filtros por kind, dashboard con saldo total agregado en moneda base. Cmd+K dispara los modales. Multi-divisa: cuenta tiene currency fija; transfers cross-currency bloqueadas hasta Step 8. amount_base mock 1:1 hasta Step 8. |
 | 7 | Categorías + presupuestos | ⏳ pendiente | |
 | 8 | Import CSV con mapping inteligente | ⏳ pendiente | |
 | 9 | Auto-categorización con IA + embeddings | ⏳ pendiente | |
@@ -28,7 +28,32 @@
 
 ## Next action
 
-**Step 6 — CRUD de cuentas + registro manual de transacciones.**
+**Step 7 — Categorías custom + presupuestos.**
+
+Por hacer:
+
+1. **CRUD de categorías propias del usuario** (`user_id NOT NULL`):
+   - Modal "Nueva categoría" con name, kind, parent (optional, solo si kind matchea), icon (del set curado), color (paleta muted).
+   - Server actions: `createCategory`, `updateCategory`, `archiveCategory`.
+   - Página /categorias: mostrar las sistema (read-only badge) + las del usuario (editables/archivables). Filtros por kind (income/expense/transfer).
+   - Validación: si se archiva una categoría que tiene transacciones, ofrecer mover a otra antes de archivar.
+2. **CRUD de presupuestos** (tabla `budgets`):
+   - Modal "Nuevo presupuesto" con category, amount, period (monthly/weekly/yearly), start_date, rollover bool.
+   - Server actions: `createBudget`, `updateBudget`, `archiveBudget`.
+   - Página /presupuestos: cards por presupuesto con barra de progreso (gasto del período / presupuesto), color tonal según porcentaje (positive/warning/negative del Noir).
+3. **Query `getBudgetProgress(userId, period)`** que calcula:
+   - Gasto del período actual sumando transactions (kind='expense') de las categorías presupuestadas.
+   - Devuelve `{ budgetId, categoryId, budgetAmount, spent, remaining, percent, status }`.
+4. **Mostrar progreso en dashboard**: si hay presupuestos activos, una sección "Presupuestos del mes" con barras compactas. Si están todos en verde, copy editorial breve.
+5. **Cmd+K acciones**: "Nueva categoría", "Nuevo presupuesto".
+
+Antes de Step 7: **commit Step 6**.
+
+Sugerido:
+
+```
+feat(money): crud cuentas + transacciones manual con multi-divisa
+```
 
 Es el primer step donde la app produce datos reales del usuario. Cuidado especial con el manejo de dinero (mandato regla 4 y 5).
 
@@ -179,6 +204,12 @@ feat(auth): wire clerk + third-party auth supabase
 | **`<ViewTransition>` desde `react`** + `experimental.viewTransition: true` | Patrón oficial Next 16. Requiere triple-slash reference a `react/canary` en `src/types/react-experimental.d.ts` para que TS reconozca el export. Animations duration y easing aplicadas globalmente vía `::view-transition-*` en `globals.css`. |
 | **Páginas placeholder con `EmptyState` editorial** | Regla 14 del mandato: empty states son una oportunidad, no un bug. Fraunces italic en el headline, body Inter, sin ilustración. |
 | **Cmd+K acción IA "Preguntar a Finanzia"** disabled con `próximamente` | Mostrar la ranura desde el inicio comunica intención del producto. Activar en Step 11 (copiloto). El icono usa `accent-ai` — única excepción al cero-color en este step. |
+| **`amount_base = amount_original` mock 1:1 hasta Step 8** | Multi-divisa real requiere tasas en `exchange_rates` y el cron de fetch. Por ahora si la moneda de la tx coincide con `baseCurrency` (default COP), el cálculo es exacto. Si no, el saldo agregado del dashboard será incorrecto para cuentas no-base — documentado en código (`transacciones/actions.ts` línea ~127) y se arregla en Step 8. |
+| **Transferencias cross-currency bloqueadas** en Step 6 | `createTransaction` rechaza transfers entre cuentas de monedas distintas. Implementar conversión correcta requiere dos asientos espejo (uno en cada moneda) o un mecanismo de doble entrada. Decisión: posponer hasta tener tasas reales (Step 8). |
+| **Saldo computado vía CTE SQL crudo en `listAccountsWithBalance`** | Drizzle no expone bien CTEs/UNION; `db.execute(sql\`...\`)` es más limpio que ensamblar tres subqueries. El saldo se computa al render — no se almacena en la tabla `accounts` (decisión previa, evita drift). |
+| **UI base Noir hecha a mano, no `shadcn add`** | El componente que vino del bootstrap (`button.tsx`) usaba tokens shadcn defaults; los reescribí siguiendo el mandato. Los demás (Input, Select, Dialog, Field, etc.) son nuevos. Si en el futuro usamos shadcn CLI, el target será sobreescribir, no añadir paralelo. |
+| **Dialogs globales gestionados por Zustand store** (`dialog-store.ts`) | Patrón uniforme: cada dialog tiene un `id`, el store guarda `active: id | null`, los triggers dispatchan `open(id)`. Permite que Cmd+K y botones de header compartan el control sin prop drilling ni context. |
+| **`(app)/layout.tsx` fetchea accounts + categories para los dialogs** | Los modales necesitan estos datos para los selects. Como el layout envuelve todo el grupo, está disponible en cualquier ruta. `revalidatePath` después de crear/archivar invalida el layout automáticamente. |
 
 ---
 
