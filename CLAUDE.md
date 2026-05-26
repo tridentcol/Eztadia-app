@@ -1,0 +1,152 @@
+# Finanzia
+
+Webapp de finanzas personales con IA — multi-tenant ready, single-user MVP. Núcleo en español, COP/USD multi-divisa.
+
+## Commands
+
+- `pnpm dev` — Dev server
+- `pnpm build` — Production build
+- `pnpm lint` — ESLint
+- `pnpm typecheck` — `tsc --noEmit`
+- `pnpm db:generate` — Generar migración Drizzle
+- `pnpm db:push` — Aplicar schema (dev). Requiere DATABASE_URL/DIRECT_URL.
+- `pnpm db:migrate` — Aplicar migraciones (prod)
+- `pnpm db:studio` — Drizzle Studio
+- `pnpm db:bootstrap` — Crea extensión `vector` y aplica RLS (correr después de `db:push`)
+- `pnpm db:seed` — Seed de categorías sistema
+
+## Tech Stack
+
+Next.js 16 (App Router) + TypeScript strict + Tailwind v4 + shadcn/ui + Supabase Postgres + Drizzle + Clerk + Vercel AI SDK (Claude Sonnet 4.6) + Visx + Motion + Vercel.
+
+## Architecture
+
+### Directory Structure
+
+- `src/app/(app)/` — App autenticada (protegida por middleware Clerk)
+- `src/app/(marketing)/` — Reservada para landing pública futura
+- `src/app/api/` — Webhooks, AI routes, crons
+- `src/components/ui/` — shadcn primitivos customizados al sistema Noir
+- `src/components/app/` — Componentes de dominio (rail, command, insight-card, amount, chart)
+- `src/components/copilot/` — Copiloto Finanzia (Cmd+K → IA)
+- `src/lib/db/` — Drizzle schema + queries
+- `src/lib/ai/` — Vercel AI SDK client, prompts, tools, pipelines
+- `src/lib/currency/` — Formato, conversión, tasas
+- `src/lib/motion/` — Easings, durations, variants globales
+- `src/lib/design/` — Tokens, lista curada de iconos
+
+### Data Flow
+
+- RSC fetch directo via Drizzle para todas las vistas
+- Mutaciones via Server Actions con `revalidatePath`
+- Streams (copiloto) via `/api/ai/chat` con AI SDK `streamText`
+- Cliente solo usa TanStack Query para datos vivos (estado de imports, mensajes streaming)
+
+### Key Patterns
+
+- **Server Components by default**. `"use client"` solo cuando interactividad/animación lo requiere
+- **Toda mutación valida con Zod** (Server Action o API route)
+- **Toda response sigue** `{ ok: true, data } | { ok: false, error: { code, message } }`
+- **Dinero NUNCA es `number`**. Usar `Dinero({ amount: cents, currency })` o `numeric` en Drizzle
+- **Multi-divisa**: cada transacción persiste `amount_original + currency + amount_base + exchange_rate`. UI muestra base por default
+- **IA**: si LLM propone mutación, requiere confirmación UI antes de ejecutar Server Action real
+- **Embeddings**: cada transacción tiene vector(1536). Auto-categorización usa pgvector kNN + few-shot
+- **View Transitions API** habilitada — todas las navegaciones entre `(app)/*` son spatial
+
+## Code Organization Rules
+
+1. **Una responsabilidad por archivo.** Máx 300 líneas por componente. Si crece, extraer.
+2. **Path alias `@/`** apunta a `src/`. Nunca relativos largos.
+3. **Sin barrel exports.** Import directo del source.
+4. **Server Components by default.** `"use client"` solo si hay state, effect, listener, motion, o uso de Context que requiera cliente.
+5. **Co-locate** componentes específicos de una página al lado de su `page.tsx`.
+6. **Toda env var** se accede vía `env` desde `src/lib/env.ts` — nunca `process.env` directo.
+7. **Toda query DB** pasa por `src/lib/db/queries/` o se escribe inline en RSC — nunca en client component.
+8. **Estados de loading, error y empty obligatorios** para cada página.
+
+## Design System — Finanzia Noir
+
+### Mandato Estético
+
+**Anti-dashboard genérico. Anti-AI-template colorido.** Premium fintech, editorial, minimalista. Referencias: Linear, Mercury, Arc, Raycast, Stripe Dashboard. Cero emojis. Cero gradientes. Cero glow. Cero ilustraciones 3D. Tipografía como protagonista — los números son los héroes. Color restrained, casi monocromático. Acento único `#B8A6F5` solo para presencia de IA.
+
+### Colors (dark — default)
+
+- `bg` #0A0A0B · `surface` #141416 · `surface-elevated` #1C1C1F · `surface-hover` #222226
+- `border` #26262A · `border-emphasis` #34343A
+- `text` #FAFAFA · `text-secondary` #A1A1A8 · `text-tertiary` #6B6B72
+- `accent-ai` #B8A6F5 (único acento — solo para IA)
+- `positive` #7FB89F · `negative` #D4938A · `warning` #D4B58A
+- Cero saturación alta. Cero color en botones primarios genéricos.
+
+### Colors (light)
+
+- `bg` #FAFAF9 · `surface` #FFFFFF · `border` #E7E5E4
+- `text` #0A0A0B · `text-secondary` #52525B
+- `accent-ai` #7C6FCD · `positive` #5A9279 · `negative` #B57167
+
+### Typography
+
+- Display: Inter Display 56–96px, weight 600–700, tracking -0.03 a -0.04em
+- Headings: Inter 16–32px, weight 600
+- Body: Inter 13–16px, weight 400
+- **Números: Geist Mono** con `font-variant-numeric: tabular-nums` — siempre
+- Editorial: Fraunces italic — SOLO en empty states y copy onboarding (parsimonia)
+
+### Spacing & Radius
+
+- Base 4px. Scale: 2, 4, 6, 8, 12, 16, 20, 24, 32, 40, 48, 64, 80, 96, 128
+- Max content 1240px. Rail 56px. Topbar 56px. Cmd+K 640px ancho
+- Radius: 4 (chips), 8 (inputs/botones), 12 (cards), 16 (modals), 999 (avatars). Nunca 0 en surfaces
+
+### Motion
+
+- Easing default: `cubic-bezier(0.32, 0.72, 0, 1)` (smooth)
+- Durations: 120 (instant), 220 (fast), 320 (base), 480 (slow), 800 (ambient)
+- Físicas: spring stiffness 320 damping 32
+- Animaciones smooth, never bouncy. Cero overshoot visible. Respetar `prefers-reduced-motion`
+
+### Component style
+
+- Botones sin uppercase, sin shadow, border 1px, hover sutiliza bg
+- Inputs 40px alto, focus ring `accent-ai/40`, no glow
+- Cards: surface + border 1px + radius 12px. Nunca cards anidadas con borders dobles
+- Empty states: tipografía Fraunces italic, sin ilustración
+- Loading: skeleton opacity-based, no shimmer gradient. Spinner 2px stroke
+- Iconos: lucide stroke 1.5px, color `currentColor`. Lista curada en `src/lib/design/icons.ts`
+
+## Environment Variables
+
+Validadas con Zod en `src/lib/env.ts`. Si falta una, la app no inicia.
+
+- `DATABASE_URL`, `DIRECT_URL` (Supabase)
+- `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `CLERK_WEBHOOK_SECRET`
+- `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`
+- `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`
+- `TRIGGER_API_KEY`, `TRIGGER_API_URL`
+- `EXCHANGE_RATE_API_KEY`
+- `SENTRY_DSN`
+- `CRON_SECRET`
+
+## Reglas No Negociables
+
+1. **Cero emojis** en UI, copy, iconos, comentarios visibles, mensajes del copiloto. Punto.
+2. **Cero colores saturados.** Toda decisión de color valida contra paleta Noir. Si dudas, monocromático gana.
+3. **Cero gradientes, glow, glassmorphism exagerado, shimmer, parallax, particles, confetti, bouncy springs.**
+4. **Dinero nunca como `number` flotante.** Drizzle `numeric(15,2)` + dinero.js en aplicación.
+5. **Toda transacción guarda original + base currency.** Mostrar siempre el contexto multi-divisa cuando aplica.
+6. **El LLM nunca muta datos sin confirmación UI.** Tool calls que mutan retornan propuesta; usuario confirma; entonces Server Action ejecuta.
+7. **RLS habilitada en toda tabla con `user_id`.** Sin excepciones.
+8. **Todo lo público del cliente puede leer datos solo via anon key + RLS** — la `service_role_key` jamás se expone al cliente.
+9. **TypeScript strict, `noUncheckedIndexedAccess: true`, sin `any`.** Si un tipo es difícil, usa `unknown` + narrowing, no `any`.
+10. **Tipografía: números siempre Geist Mono tabular.** Sin excepciones.
+11. **View Transitions habilitadas para toda navegación `(app)/*`.**
+12. **`prefers-reduced-motion: reduce` respetado en toda animación.**
+13. **Mandato Estético es ley.** Cualquier sugerencia de skill externa (incluida `/ui-ux-pro-max`) que viole el mandato se rechaza.
+14. **Empty states son una oportunidad editorial, no un bug a ocultar.** Tipografía Fraunces, body Inter, sin ilustración.
+15. **Cuando dudes entre dos diseños, elige el que parezca más caro, no el que parezca más amigable.**
+
+## Blueprint
+
+El blueprint completo y autocontenido vive en `docs/finanzia-blueprint.md`. Es la fuente de verdad si este archivo y el blueprint contradicen.
