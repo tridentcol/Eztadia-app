@@ -24,6 +24,7 @@ const navigation: NavItem[] = [
   { label: 'Ir a Presupuestos', href: '/presupuestos', icon: 'target' },
   { label: 'Ir a Metas', href: '/metas', icon: 'piggy-bank' },
   { label: 'Ir a Insights', href: '/insights', icon: 'sparkles' },
+  { label: 'Ir a Importar', href: '/importar', icon: 'upload' },
   { label: 'Ajustes', href: '/ajustes', icon: 'settings' },
 ]
 
@@ -61,6 +62,7 @@ export function CommandPalette() {
   const Wallet = icons.wallet
   const Tag = icons.tag
   const Target = icons.target
+  const Upload = icons.upload
 
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
@@ -127,6 +129,14 @@ export function CommandPalette() {
                 >
                   <Target strokeWidth={1.5} className="h-[15px] w-[15px]" />
                   <span className="flex-1">Nuevo presupuesto</span>
+                </Command.Item>
+                <Command.Item
+                  value="Importar CSV extracto bancario"
+                  onSelect={() => runNavigate('/importar')}
+                  className="text-text-secondary aria-selected:bg-surface-hover aria-selected:text-text mx-2 flex h-9 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors"
+                >
+                  <Upload strokeWidth={1.5} className="h-[15px] w-[15px]" />
+                  <span className="flex-1">Importar CSV</span>
                 </Command.Item>
               </Command.Group>
 

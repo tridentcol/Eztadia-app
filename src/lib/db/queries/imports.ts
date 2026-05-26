@@ -1,5 +1,5 @@
 import 'server-only'
-import { and, desc, eq } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
 
 import { db } from '@/lib/db/client'
 import { accounts, importBatches } from '@/lib/db/schema'

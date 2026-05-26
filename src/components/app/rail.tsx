@@ -17,6 +17,7 @@ const primary: RailItem[] = [
   { label: 'Resumen', href: '/dashboard', icon: 'home' },
   { label: 'Cuentas', href: '/cuentas', icon: 'wallet' },
   { label: 'Transacciones', href: '/transacciones', icon: 'list' },
+  { label: 'Importar', href: '/importar', icon: 'upload' },
   { label: 'Categorías', href: '/categorias', icon: 'tag' },
   { label: 'Presupuestos', href: '/presupuestos', icon: 'target' },
   { label: 'Metas', href: '/metas', icon: 'piggy-bank' },

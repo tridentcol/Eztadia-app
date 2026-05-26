@@ -3,7 +3,7 @@
 > Archivo vivo. **Actualízalo al cerrar cada step o al tomar una decisión que afecte el rumbo.**
 > El builder lo lee al inicio de cada sesión para no perder continuidad.
 >
-> Última actualización: 2026-05-26 — Step 7 ✅. Step 8 wip (helpers + server action listos, falta `/importar/page.tsx`). **Deploy en Vercel rompió** (servía un archivo descargable en vez de la página) — fix aplicado: removido `vercel.json` agresivo y movidos headers a `next.config.ts`. Pendiente: verificar redeploy + cerrar Step 8 + seguir 9-12.
+> Última actualización: 2026-05-26 — Step 8 ✅. Deploy Vercel funcionando (era env vars vacías → middleware Clerk crasheaba sin `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` → 500 con body sin Content-Type → Chrome descargaba como octet-stream). Vercel CLI instalado y proyecto linkeado. 14 env vars pegadas a Production + Preview. **Pendiente**: Step 8b (exchange rates cron) → 9-12. Smoke test con CSV real de banco lo hace el usuario cuando tenga uno a mano.
 
 ---
 
@@ -18,7 +18,7 @@
 | 5 | Layout principal — Rail + Cmd+K + View transitions | ✅ hecho | `Rail` 56px (client, usePathname para active state, tooltips CSS-only). `Topbar` 56px con breadcrumb + ghost button "Buscar ⌘K". `CommandPalette` con cmdk + radix Dialog: navegación + sección IA placeholder con `accent-ai`. Listener global Cmd+K via Zustand store. ViewTransitions activadas: `rail-indicator` (animación del active mark) y `app-content` (crossfade del main). Páginas placeholder en `(app)/{cuentas,transacciones,categorias,presupuestos,metas,insights,ajustes}` con `EmptyState` editorial (Fraunces italic + body Inter). `categorias` ya carga las 55 sembradas via Drizzle. |
 | 6 | CRUD cuentas + transacciones manual | ✅ hecho | UI base Noir en `src/components/ui/`. Helpers en `src/lib/currency/`. Server actions `createAccount`, `createTransaction`, `archiveAccount` con Zod + revalidatePath. Saldo computado vía CTE SQL (positive income, negative expense, transfers afectan ambos extremos). Página /cuentas con cards reales, /transacciones con tabla + filtros por kind, dashboard con saldo total agregado en moneda base. Cmd+K dispara los modales. Multi-divisa: cuenta tiene currency fija; transfers cross-currency bloqueadas hasta Step 8. amount_base mock 1:1 hasta Step 8. |
 | 7 | Categorías + presupuestos | ✅ hecho | `createCategory`/`archiveCategory` (sistema queda read-only). Modal con icon picker (16 lucides) + paleta muted de 8 colores. `/categorias` separa "Tus categorías" vs "Sistema" con filtros por kind. `listBudgetsWithProgress` usa `date_trunc('month'/'week'/'year')` para resolver el período actual y suma `amount_base` de transacciones expense con `category_id` exacto. `BudgetProgressCard` con barra tonal (safe / warning / exceeded). Sección "Presupuestos del período" en dashboard. Cmd+K: + Nueva categoría, + Nuevo presupuesto. |
-| 8 | Import CSV con mapping inteligente | ⚠ wip | Helpers `src/lib/import/{infer-columns,parse-row}.ts` listos. Server action `runImport` en `src/app/(app)/importar/actions.ts` lista (crea `import_batch`, parsea filas, inserta en chunks de 200, actualiza estado del batch). Cliente `importer-client.tsx` con drop zone, mapping UI auto-inferido, preview, headerRow ajustable. Query `listImportBatchesForUser` lista. **FALTA**: el server component `src/app/(app)/importar/page.tsx` que fetcha accounts + batches y monta el cliente, item "Importar CSV" en Cmd+K, y verificar que `papaparse` esté en deps (ya está, ^5.5.3). |
+| 8 | Import CSV con mapping inteligente | ✅ hecho | Helpers `infer-columns` (heurística regex ES/EN) + `parse-row` (fecha ISO/DD-MM-YYYY, monto LATAM/EU, kind signed o split columns). Server action `runImport` crea batch, parsea, inserta en chunks de 200, marca status. `/importar/page.tsx` server component con `ImporterClient` (drop zone, mapping UI inferido, preview, headerRow ajustable) + sección "Imports recientes" con tabla. Cmd+K acción "Importar CSV" navega a `/importar`. Rail tiene item con icono `upload`. amount_base = amount_original 1:1 mock hasta Step 8b. |
 | 9 | Auto-categorización con IA + embeddings | ⏳ pendiente | |
 | 10 | Insights engine + cron diario | ⏳ pendiente | |
 | 11 | Copiloto Finanzia con tool-calling | ⏳ pendiente | |
@@ -28,35 +28,27 @@
 
 ## Next action
 
-**Antes de tocar código: verificar el redeploy de Vercel.**
+**Step 8b — Tasas de cambio reales + cross-currency transfers.**
 
-1. Abrir el dashboard del proyecto en Vercel → ver el último deployment (debe corresponder al commit `fix(vercel)` que está en `main`).
-2. Si el build aún falla:
-   - Revisar logs en Vercel.
-   - Verificar que todas las env vars de §1 de `docs/DEPLOY.md` estén pegadas como Production + Preview. **Especial**: `NEXT_PUBLIC_APP_URL` debe apuntar al dominio Vercel asignado (no `localhost:3000`).
-3. Si el build pasa pero la URL se sigue descargando como archivo: probablemente el caché del browser. Hard refresh + verificar en incógnito.
-4. Validar end-to-end igual que `/api/auth-check` hizo en Step 3 (sign-in → /dashboard → ver fila en Supabase).
+Pre-requisito para que el dashboard agregue saldos correctamente cuando haya cuentas de divisas distintas y para desbloquear transferencias cross-currency. Hoy `amount_base = amount_original` (mock 1:1) — funcional sólo si todas las cuentas comparten `baseCurrency`.
 
-**Luego: cerrar Step 8 — Import CSV con mapping inteligente.**
+Por hacer:
 
-Estado wip:
-- ✅ `src/lib/import/infer-columns.ts` — heurística regex.
-- ✅ `src/lib/import/parse-row.ts` — normaliza fecha (ISO, DD/MM/YYYY), monto (LATAM y EU), kind (signed o split columns).
-- ✅ `src/app/(app)/importar/actions.ts` — `runImport` con chunks de 200, crea `import_batches`, atualiza estado.
-- ✅ `src/lib/db/queries/imports.ts` — `listImportBatchesForUser`.
-- ✅ `src/app/(app)/importar/importer-client.tsx` — drop zone, mapping UI, preview, header row picker.
-- ⏳ **`src/app/(app)/importar/page.tsx`** — server component pendiente. Estructura sugerida:
-  ```tsx
-  import { requireCurrentUser } from '@/lib/auth'
-  import { listUserAccountsBasic } from '@/lib/db/queries/transactions'
-  import { listImportBatchesForUser } from '@/lib/db/queries/imports'
-  import { ImporterClient } from './importer-client'
-  // header con título, ImporterClient con accounts, sección "Imports recientes" con batches
-  ```
-- ⏳ Cmd+K: agregar item "Importar CSV" que navegue a `/importar`.
-- ⏳ Smoke test con un CSV real de algún banco.
+1. **API client para tasas** — usar `exchangerate.host` (free tier, no key) o `apilayer/exchangerates_data` si el usuario carga `EXCHANGE_RATE_API_KEY`. Helper `src/lib/currency/rates.ts` con:
+   - `fetchDailyRates(base: string, symbols: string[]): Promise<Record<string, string>>`.
+   - `getRate(from: string, to: string, date: string): Promise<string>` que lee de `exchange_rates` con fallback al último disponible.
+2. **Cron endpoint** `src/app/api/cron/exchange-rates/route.ts`:
+   - Protegido por header `Authorization: Bearer ${CRON_SECRET}`.
+   - Cada vez que se llame, fetcha tasas del día para `COP, USD, EUR, MXN` (base = COP por defecto).
+   - Upsert en `exchange_rates(date, from_currency, to_currency, rate)` via `onConflictDoUpdate`.
+3. **Configurar cron en Vercel**: `crons` field en `vercel.ts` (o dashboard) — diario a las 06:00 UTC.
+4. **Reescribir `createTransaction` y `runImport`** para usar `getRate(account.currency, baseCurrency, tx.date)` y popular `amountBase + exchangeRate` reales. Recalcular saldos.
+5. **Habilitar cross-currency transfers** en `createTransaction`: si las cuentas tienen monedas distintas, generar dos asientos espejo con tasas del día (uno en cada cuenta, ambos con `import_batch_id` o `transfer_group_id` compartido).
+6. **Backfill opcional** de transacciones existentes — recorrer `transactions WHERE currency != baseCurrency` y rellenar `amount_base + exchange_rate` con la tasa del día de la transacción.
 
-**Después de Step 8: Step 8b (exchange rates cron) → Step 9 (IA + embeddings) → Step 10 (insights) → Step 11 (copiloto) → Step 12 (metas/recurring/alertas/deploy prod).**
+**Después: Step 9 (IA + embeddings) → Step 10 (insights) → Step 11 (copiloto) → Step 12 (metas/recurring/alertas/deploy prod).**
+
+**Smoke test pendiente** (no bloquea Step 8b): probar el flujo de import con un CSV real de Bancolombia/Nu/Davivienda y confirmar que las heurísticas y el parse-row aguantan. Si fallan headers raros, refinar regex en `infer-columns.ts`.
 
 ---
 
@@ -287,6 +279,9 @@ feat(auth): wire clerk + third-party auth supabase
 | **Solo 1 nivel de jerarquía en categorías** | `createCategory` rechaza `parentId` si el parent ya tiene `parentId !== null`. Mantiene la UI predecible y evita árboles arbitrarios. Si se necesita profundidad, lo revisamos. |
 | **Icon picker curado (16 iconos) vs lista completa (~85)** | Para el modal de Nueva categoría limitamos a un subset visualmente coherente. La lista completa sigue disponible vía `icons` import para componentes que requieren más. |
 | **Paleta muted en `src/lib/design/palette.ts`** separada de `tokens.ts` | `tokens.ts` es para el sistema (bg, text, etc.). `palette.ts` es para colores que el usuario asigna (categorías, futuras tags). Separación semántica. |
+| **Item "Importar" en el rail (no escondido en Cmd+K)** | Aunque conceptualmente es una "acción", la importación es una operación frecuente y discoverable. Tener un slot visual junto a Transacciones lo hace obvio. Se mantiene también el atajo en Cmd+K para flujos de teclado. |
+| **Imports cap a 5000 filas por batch** en `runImport` | Defensa contra extractos enormes que saturen el Server Action. Si en el futuro un usuario tiene más, decidiremos entre Trigger.dev jobs o chunking client-side. |
+| **Subir env vars a Vercel vía CLI** (no dashboard manual) | `vercel env add NAME ENV --value VALUE --yes --force` con un loop sobre `.env.local`. Para preview hay que pasar `""` como tercer arg (gitbranch), si no el CLI exige una branch específica en non-interactive mode. Patrón anotado en gotchas. |
 
 ---
 
@@ -308,7 +303,8 @@ feat(auth): wire clerk + third-party auth supabase
 - **Pooler host de Supabase varía por región Y por número de cluster**: el formato es `aws-N-<region>.pooler.supabase.com`. Para este proyecto: `aws-1-us-west-2.pooler.supabase.com`. Si la región está mal, devuelve "Tenant or user not found" (no es error de password). Si el N (`aws-0` vs `aws-1`) está mal, devuelve "(ENOTFOUND) tenant/user not found". La forma fiable de obtener la string: copiarla directo del dashboard de Supabase → Settings → Database → Connection string.
 - **Vars opcionales en `.env.local` con valor vacío (`FOO=`) requieren preprocess**: Zod `.optional()` solo ignora `undefined`, no `""`. Helper `optionalString()` en `env.ts` convierte `""` a `undefined` antes de validar.
 - **Build de Vercel falla si env vars faltan al primer deploy**: `env.ts` arrojaba al import. Fix aplicado (commit `e733e0e`): `env.ts` detecta `NEXT_PHASE === 'phase-production-build'` o `SKIP_ENV_VALIDATION=1` y NO arroja durante el build. En runtime sigue estricto. Esto permite que el primer deploy pase aunque las env vars no estén configuradas todavía. Tras pegarlas en Vercel, redeploy y la app funciona normal.
-- **Vercel servía `finanzia-app-six.vercel` (archivo descargable) en vez de la página**: causa probable — `vercel.json` con `framework`, `installCommand`, `buildCommand` y `regions: pdx1` interfería con la autodetección de Vercel. Fix: removido `vercel.json` completamente, headers movidos a `next.config.ts` con `async headers()`. Vercel ahora autodetecta Next.js + pnpm automáticamente.
+- **Vercel servía `finanzia-app-six.vercel` (archivo descargable) en vez de la página**: causa REAL (confirmada en logs de runtime) — las env vars no estaban configuradas en Vercel, así que el middleware Clerk crasheaba con `Missing publishableKey`. La respuesta 500 venía con body `"Internal Server Error"` plano y sin `Content-Type`; combinado con `X-Content-Type-Options: nosniff` (que dejamos en `next.config.ts`), Chrome no podía sniffearlo y lo trataba como `application/octet-stream`, descargándolo con nombre basado en el host (`finanzia-app-six.vercel`). Quitar `vercel.json` ayudó (lo hicimos antes) pero NO era la causa raíz. Fix definitivo: subir las 14 env vars de `.env.local` a Vercel Production + Preview con `vercel env add NAME ENV --value VALUE --yes --force`. Para Preview pasar `""` como tercer arg (gitbranch) — sin él el CLI exige una branch específica en non-interactive mode.
+- **`vercel env add NAME preview` falla en non-interactive con `git_branch_required`**: en modo agent (auto-detected) el CLI exige saber a qué git branch del preview. Trabajar alrededor pasando `""` explícito: `vercel env add VAR preview "" --value VAL --yes --force` → aplica a todas las preview branches. Si pasas un nombre de branch (ej. `main`) falla con `Cannot set Production Branch "main" for a Preview Environment Variable`.
 - **`postgres-js` devuelve columnas `date` (sin time) como `string` `'YYYY-MM-DD'`, NO como `Date`**: solo `timestamptz` se parsea a `Date`. Si tipas mal y haces `row.someDate.toISOString()`, falla en runtime con "toISOString is not a function". Aplicar siempre `period_start: string` al typing de `db.execute<T>(...)` cuando la columna sea `::date` o `date`. (Bug encontrado en `listBudgetsWithProgress` durante Step 7.)
 - **`revalidatePath('/foo')` no invalida los layouts ancestros**: solo invalida la page de `/foo`. El `(app)/layout` que fetchea accounts + categories para los selects de los dialogs queda con cache viejo. Solución aplicada: después de un mutación exitosa, llamar `router.refresh()` desde el cliente — fuerza re-fetch de TODOS los RSCs de la ruta actual incluyendo el layout. Patrón unificado en los 4 dialogs (`new-{account,transaction,category,budget}-dialog.tsx`). Alternativa más agresiva: `revalidatePath('/', 'layout')` en cada server action, pero invalida también marketing innecesariamente.
 - **Clerk URLs por env var**: `NEXT_PUBLIC_CLERK_SIGN_IN_URL`, `NEXT_PUBLIC_CLERK_SIGN_UP_URL`, `*_FALLBACK_REDIRECT_URL`. Ya están en `.env.local`. Si cambian, también hay que tocarlos en el dashboard de Clerk (Paths) para que coincidan.
@@ -340,7 +336,7 @@ feat(auth): wire clerk + third-party auth supabase
 | Upstash Redis | ⏳ no creado | Step 8+ (rate limit / cache) |
 | Trigger.dev | ⏳ no creado | Step 8 (job de import CSV) |
 | Sentry | ⏳ no creado | Step 12 (deploy) |
-| Vercel | ⏳ no creado | Step 12 |
+| Vercel | ✅ desplegado | Proyecto `daniels-projects-8dbbaf4e/finanzia-app`. Alias prod: `finanzia-app-six.vercel.app`. 14 env vars pegadas en Production + Preview. CLI linkeado en `.vercel/`. |
 
 `.env.local` contiene autollenados: `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `CRON_SECRET`, rutas de Clerk. Pendiente de llenar: password DB, service_role, todas las claves de servicios externos.
 
