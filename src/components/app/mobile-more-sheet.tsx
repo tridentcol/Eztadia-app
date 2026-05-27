@@ -29,6 +29,7 @@ const SECTIONS: Section[] = [
   {
     label: 'Operación',
     items: [
+      { label: 'Deudas', href: '/deudas', icon: 'landmark' },
       { label: 'Importar', href: '/importar', icon: 'upload' },
       { label: 'Categorías', href: '/categorias', icon: 'tag' },
       { label: 'Presupuestos', href: '/presupuestos', icon: 'target' },

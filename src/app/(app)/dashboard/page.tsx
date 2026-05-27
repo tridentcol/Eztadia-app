@@ -12,8 +12,13 @@ import {
 import { listTransactionsForUser } from '@/lib/db/queries/transactions'
 import { listBudgetsWithProgress } from '@/lib/db/queries/budgets'
 import { listUnreadInsights } from '@/lib/db/queries/insights'
+import { getDebtsSummary } from '@/lib/db/queries/debts'
+import { getExpensesByParentCategory } from '@/lib/db/queries/expenses-by-parent'
+import { convertAmount } from '@/lib/currency/rates'
 import { Amount } from '@/components/app/amount'
 import { BudgetProgressCard } from '@/components/app/budget-progress'
+import { CategoryBreakdown } from '@/components/app/category-breakdown'
+import { DebtsSummaryCard } from '@/components/app/debts-summary-card'
 import { EmptyState } from '@/components/app/empty-state'
 import { InsightCard } from '@/components/app/insight-card'
 import { NewAccountTrigger } from '@/components/app/new-account-trigger'
@@ -36,14 +41,46 @@ export default async function DashboardPage() {
     where: eq(profiles.userId, user.id),
   })
   const baseCurrency = (profile?.baseCurrency ?? 'COP') as CurrencyCode
-  const [accountsList, totalSnapshot, recent, budgets, unreadInsights] = await Promise.all([
+  const [
+    accountsList,
+    totalSnapshot,
+    recent,
+    budgets,
+    unreadInsights,
+    debtsSummary,
+    expensesByParent,
+  ] = await Promise.all([
     listAccountsWithBalance(user.id),
     getTotalBalanceInBase(user.id, baseCurrency),
     listTransactionsForUser(user.id, { limit: 5 }),
     listBudgetsWithProgress(user.id),
     listUnreadInsights(user.id, 3),
+    getDebtsSummary(user.id, baseCurrency),
+    getExpensesByParentCategory(user.id, baseCurrency),
   ])
   const totalBase = totalSnapshot.total
+
+  // Deuda de tarjetas (saldo negativo en accounts.credit_card) convertida a base.
+  const today = new Date().toISOString().slice(0, 10)
+  let creditCardDebtInBase = 0
+  for (const a of accountsList) {
+    if (a.type !== 'credit_card') continue
+    const balance = Number.parseFloat(a.currentBalance)
+    if (balance >= 0) continue
+    const owed = -balance
+    if (a.currency === baseCurrency) {
+      creditCardDebtInBase += owed
+      continue
+    }
+    const conv = await convertAmount(
+      String(owed),
+      a.currency,
+      baseCurrency,
+      today,
+      { fallbackToOne: true },
+    )
+    creditCardDebtInBase += Number.parseFloat(conv.amount)
+  }
 
   // Presupuestos a destacar: primero exceeded, luego warning, luego safe por % desc.
   const featuredBudgets = [...budgets]
@@ -114,6 +151,14 @@ export default async function DashboardPage() {
               ))}
             </ul>
           </section>
+
+          <DebtsSummaryCard
+            summary={debtsSummary}
+            creditCardDebtInBase={creditCardDebtInBase}
+            currency={baseCurrency}
+          />
+
+          <CategoryBreakdown data={expensesByParent} currency={baseCurrency} />
 
           <section className="flex flex-col gap-4">
             <header className="flex items-center justify-between">

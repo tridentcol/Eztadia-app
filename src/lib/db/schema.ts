@@ -78,6 +78,17 @@ export const importStatus = pgEnum('import_status', [
   'failed',
 ])
 
+export const debtType = pgEnum('debt_type', [
+  'loan_personal',
+  'mortgage',
+  'auto_loan',
+  'student_loan',
+  'family_loan',
+  'other',
+])
+
+export const debtStatus = pgEnum('debt_status', ['active', 'paid', 'defaulted'])
+
 export const integrationProvider = pgEnum('integration_provider', [
   'anthropic',
   'openai',
@@ -421,6 +432,53 @@ export const alerts = pgTable(
 )
 
 // ============================================================
+// debts
+// ============================================================
+
+export const debts = pgTable(
+  'debts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    lender: text('lender'),
+    type: debtType('type').notNull(),
+    /** Monto original asumido. */
+    principal: numeric('principal', { precision: 15, scale: 2 }).notNull(),
+    /** Saldo pendiente actual. */
+    currentBalance: numeric('current_balance', { precision: 15, scale: 2 }).notNull(),
+    currency: text('currency').notNull(),
+    /** Tasa anual nominal (%) — ej. 18.50 representa 18.5% anual. */
+    interestRate: numeric('interest_rate', { precision: 7, scale: 4 }),
+    /** Cuota fija mensual (si aplica). */
+    installmentAmount: numeric('installment_amount', { precision: 15, scale: 2 }),
+    /** Plazo total en meses. */
+    termMonths: integer('term_months'),
+    /** Fecha en que se asumió la deuda. */
+    originDate: date('origin_date'),
+    /** Próximo pago programado. */
+    nextPaymentDate: date('next_payment_date'),
+    /** Día del mes en que vence (1-31). */
+    paymentDay: smallint('payment_day'),
+    /** Cuenta vinculada para pagos (opcional). */
+    linkedAccountId: uuid('linked_account_id').references(() => accounts.id, {
+      onDelete: 'set null',
+    }),
+    status: debtStatus('status').notNull().default('active'),
+    notes: text('notes'),
+    archived: boolean('archived').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('idx_debts_user').on(t.userId),
+    index('idx_debts_user_status').on(t.userId, t.status),
+  ],
+)
+
+// ============================================================
 // exchange_rates  (cache, composite PK)
 // ============================================================
 
@@ -485,6 +543,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   conversations: many(conversations),
   alerts: many(alerts),
   importBatches: many(importBatches),
+  debts: many(debts),
 }))
 
 export const profilesRelations = relations(profiles, ({ one }) => ({
@@ -494,6 +553,15 @@ export const profilesRelations = relations(profiles, ({ one }) => ({
 export const accountsRelations = relations(accounts, ({ one, many }) => ({
   user: one(users, { fields: [accounts.userId], references: [users.id] }),
   transactions: many(transactions),
+  debts: many(debts),
+}))
+
+export const debtsRelations = relations(debts, ({ one }) => ({
+  user: one(users, { fields: [debts.userId], references: [users.id] }),
+  linkedAccount: one(accounts, {
+    fields: [debts.linkedAccountId],
+    references: [accounts.id],
+  }),
 }))
 
 export const categoriesRelations = relations(categories, ({ one, many }) => ({
@@ -587,6 +655,8 @@ export type Goal = typeof goals.$inferSelect
 export type NewGoal = typeof goals.$inferInsert
 export type RecurringRule = typeof recurringRules.$inferSelect
 export type NewRecurringRule = typeof recurringRules.$inferInsert
+export type Debt = typeof debts.$inferSelect
+export type NewDebt = typeof debts.$inferInsert
 export type Insight = typeof insights.$inferSelect
 export type NewInsight = typeof insights.$inferInsert
 export type Conversation = typeof conversations.$inferSelect

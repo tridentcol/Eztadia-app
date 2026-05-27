@@ -1,0 +1,107 @@
+import 'server-only'
+import { and, asc, eq } from 'drizzle-orm'
+
+import { db } from '@/lib/db/client'
+import { debts, type Debt } from '@/lib/db/schema'
+import type { CurrencyCode } from '@/lib/currency/currencies'
+import { convertAmount } from '@/lib/currency/rates'
+
+export type DebtListItem = Debt
+
+/**
+ * Lista deudas activas (no archivadas) ordenadas por próximo pago ascendente.
+ * Las deudas sin `nextPaymentDate` van al final.
+ */
+export async function listDebts(
+  userId: string,
+  options: { includeArchived?: boolean } = {},
+): Promise<DebtListItem[]> {
+  const includeArchived = options.includeArchived ?? false
+  const rows = await db.query.debts.findMany({
+    where: includeArchived
+      ? eq(debts.userId, userId)
+      : and(eq(debts.userId, userId), eq(debts.archived, false)),
+    orderBy: [asc(debts.nextPaymentDate), asc(debts.createdAt)],
+  })
+  return rows
+}
+
+export async function getDebtById(
+  userId: string,
+  debtId: string,
+): Promise<DebtListItem | null> {
+  const row = await db.query.debts.findFirst({
+    where: and(eq(debts.id, debtId), eq(debts.userId, userId)),
+  })
+  return row ?? null
+}
+
+export type DebtsSummary = {
+  /** Suma de saldos pendientes convertida a la moneda base del usuario. */
+  totalBalanceInBase: string
+  /** True si alguna conversión cayó a 1:1 por falta de tasa. */
+  partial: boolean
+  /** Conteo de deudas activas (no archivadas, status='active'). */
+  activeCount: number
+  /** Próximo pago en cualquier deuda (la fecha más cercana en el futuro). */
+  nextPayment: {
+    debtId: string
+    debtName: string
+    date: string
+    amount: string | null
+    currency: string
+  } | null
+}
+
+/**
+ * Resumen agregado de deudas para el widget de dashboard y header de /deudas.
+ * Convierte saldos a baseCurrency con la última tasa disponible.
+ */
+export async function getDebtsSummary(
+  userId: string,
+  baseCurrency: CurrencyCode,
+): Promise<DebtsSummary> {
+  const list = await listDebts(userId)
+  const today = new Date().toISOString().slice(0, 10)
+  let total = 0
+  let partial = false
+
+  for (const d of list) {
+    if (d.status !== 'active') continue
+    if (d.currency === baseCurrency) {
+      total += Number.parseFloat(d.currentBalance)
+      continue
+    }
+    const conv = await convertAmount(
+      d.currentBalance,
+      d.currency,
+      baseCurrency,
+      today,
+      { fallbackToOne: true },
+    )
+    if (conv.missing) partial = true
+    total += Number.parseFloat(conv.amount)
+  }
+
+  // Próximo pago: la deuda activa con nextPaymentDate más temprana (>= hoy).
+  const upcoming = list
+    .filter((d) => d.status === 'active' && d.nextPaymentDate && d.nextPaymentDate >= today)
+    .sort((a, b) => (a.nextPaymentDate! < b.nextPaymentDate! ? -1 : 1))[0]
+
+  const nextPayment = upcoming
+    ? {
+        debtId: upcoming.id,
+        debtName: upcoming.name,
+        date: upcoming.nextPaymentDate!,
+        amount: upcoming.installmentAmount,
+        currency: upcoming.currency,
+      }
+    : null
+
+  return {
+    totalBalanceInBase: total.toFixed(2),
+    partial,
+    activeCount: list.filter((d) => d.status === 'active').length,
+    nextPayment,
+  }
+}

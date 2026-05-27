@@ -11,6 +11,7 @@ export type AppDialogId =
   | 'copilot'
   | 'new-goal'
   | 'new-recurring'
+  | 'new-debt'
 
 type DialogStore = {
   active: AppDialogId | null

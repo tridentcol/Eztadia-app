@@ -13,6 +13,7 @@ import { EditCategoryDialog } from '@/components/app/edit-category-dialog'
 import { NewBudgetDialog } from '@/components/app/new-budget-dialog'
 import { NewGoalDialog } from '@/components/app/new-goal-dialog'
 import { NewRecurringDialog } from '@/components/app/new-recurring-dialog'
+import { NewDebtDialog } from '@/components/app/new-debt-dialog'
 import { CopilotDialog } from '@/components/app/copilot-dialog'
 import {
   listAvailableCategories,
@@ -64,6 +65,7 @@ export default async function AppLayout({
           kind: c.kind,
         }))}
       />
+      <NewDebtDialog />
       <CopilotDialog />
     </SidebarProvider>
   )

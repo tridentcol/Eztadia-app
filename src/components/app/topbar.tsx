@@ -13,6 +13,7 @@ const titles: Record<string, string> = {
   '/dashboard': 'Resumen',
   '/cuentas': 'Cuentas',
   '/transacciones': 'Transacciones',
+  '/deudas': 'Deudas',
   '/importar': 'Importar',
   '/categorias': 'Categorías',
   '/presupuestos': 'Presupuestos',

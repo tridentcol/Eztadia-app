@@ -28,7 +28,8 @@ DECLARE
     'conversations',
     'alerts',
     'import_batches',
-    'user_integrations'
+    'user_integrations',
+    'debts'
   ];
 BEGIN
   FOREACH t IN ARRAY tables LOOP
@@ -149,6 +150,13 @@ CREATE POLICY import_batches_isolation ON import_batches
 -- ----- user_integrations -----
 DROP POLICY IF EXISTS user_integrations_isolation ON user_integrations;
 CREATE POLICY user_integrations_isolation ON user_integrations
+  FOR ALL
+  USING (user_id = (SELECT id FROM users WHERE clerk_id = auth.jwt() ->> 'sub'))
+  WITH CHECK (user_id = (SELECT id FROM users WHERE clerk_id = auth.jwt() ->> 'sub'));
+
+-- ----- debts -----
+DROP POLICY IF EXISTS debts_isolation ON debts;
+CREATE POLICY debts_isolation ON debts
   FOR ALL
   USING (user_id = (SELECT id FROM users WHERE clerk_id = auth.jwt() ->> 'sub'))
   WITH CHECK (user_id = (SELECT id FROM users WHERE clerk_id = auth.jwt() ->> 'sub'));

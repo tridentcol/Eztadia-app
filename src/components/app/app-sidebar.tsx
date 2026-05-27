@@ -41,6 +41,7 @@ const SECTIONS: NavSection[] = [
     items: [
       { label: 'Cuentas', href: '/cuentas', icon: 'wallet' },
       { label: 'Transacciones', href: '/transacciones', icon: 'list' },
+      { label: 'Deudas', href: '/deudas', icon: 'landmark' },
       { label: 'Importar', href: '/importar', icon: 'upload' },
       { label: 'Categorías', href: '/categorias', icon: 'tag' },
       { label: 'Presupuestos', href: '/presupuestos', icon: 'target' },
@@ -77,7 +78,7 @@ export function AppSidebar() {
         <Link
           href="/dashboard"
           aria-label="finanzia"
-          className="flex h-10 items-center gap-2 px-2"
+          className="flex h-10 items-center gap-2 px-2 group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:self-center group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
         >
           <BrandMark size={24} />
           <BrandWordmark
