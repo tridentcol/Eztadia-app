@@ -3,7 +3,7 @@ import { sql } from 'drizzle-orm'
 
 import { db } from '@/lib/db/client'
 import type { CurrencyCode } from '@/lib/currency/currencies'
-import { convertAmount } from '@/lib/currency/rates'
+import { getRatesForPairs } from '@/lib/currency/rates'
 
 export type AccountListItem = {
   id: string
@@ -136,10 +136,14 @@ export async function listAccountsWithBalance(
  * Saldo total agregado en la moneda base del usuario.
  *
  * Convierte el saldo de cada cuenta (en su moneda nativa) al baseCurrency
- * usando la última tasa disponible vía `convertAmount`. Esto es robusto frente
- * a multi-divisa siempre que el cron de exchange_rates haya corrido al menos
- * una vez. Si una cuenta queda sin tasa (provider caído o cron sin correr),
- * el helper cae a 1:1 y el total queda mock, pero no rompe.
+ * usando la última tasa disponible. Robusto frente a multi-divisa siempre que
+ * el cron de exchange_rates haya corrido al menos una vez. Si una cuenta
+ * queda sin tasa (provider caído o cron sin correr), cae a 1:1 y el total
+ * queda mock, pero no rompe.
+ *
+ * `preloadedAccounts` evita la query duplicada cuando el caller (dashboard)
+ * ya tiene `listAccountsWithBalance` en su Promise.all. Si no se pasa, se
+ * fetchea internamente.
  *
  * Para la fecha de conversión usamos `today` — el saldo es un snapshot
  * presente, no histórico.
@@ -147,9 +151,19 @@ export async function listAccountsWithBalance(
 export async function getTotalBalanceInBase(
   userId: string,
   baseCurrency: string,
+  preloadedAccounts?: AccountListItem[],
 ): Promise<{ total: string; partial: boolean }> {
-  const list = await listAccountsWithBalance(userId)
+  const list = preloadedAccounts ?? (await listAccountsWithBalance(userId))
   const today = new Date().toISOString().slice(0, 10)
+  const nonBase = list.filter((a) => a.currency !== baseCurrency)
+  const rates =
+    nonBase.length > 0
+      ? await getRatesForPairs(
+          nonBase.map((a) => ({ from: a.currency, to: baseCurrency })),
+          today,
+        )
+      : new Map<string, string>()
+
   let total = 0
   let partial = false
   for (const acc of list) {
@@ -157,11 +171,13 @@ export async function getTotalBalanceInBase(
       total += Number.parseFloat(acc.currentBalance)
       continue
     }
-    const conv = await convertAmount(acc.currentBalance, acc.currency, baseCurrency, today, {
-      fallbackToOne: true,
-    })
-    if (conv.missing) partial = true
-    total += Number.parseFloat(conv.amount)
+    const rate = rates.get(`${acc.currency}->${baseCurrency}`)
+    if (rate === undefined) {
+      partial = true
+      total += Number.parseFloat(acc.currentBalance)
+      continue
+    }
+    total += Number.parseFloat(acc.currentBalance) * Number.parseFloat(rate)
   }
   return { total: total.toFixed(2), partial }
 }

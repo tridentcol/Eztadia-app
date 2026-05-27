@@ -5,16 +5,13 @@ import { requireCurrentUser } from '@/lib/auth'
 import { db } from '@/lib/db/client'
 import { profiles } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
-import {
-  getTotalBalanceInBase,
-  listAccountsWithBalance,
-} from '@/lib/db/queries/accounts'
+import { listAccountsWithBalance } from '@/lib/db/queries/accounts'
 import { listTransactionsForUser } from '@/lib/db/queries/transactions'
 import { listBudgetsWithProgress } from '@/lib/db/queries/budgets'
 import { listUnreadInsights } from '@/lib/db/queries/insights'
 import { getDebtsSummary } from '@/lib/db/queries/debts'
 import { getExpensesByParentCategory } from '@/lib/db/queries/expenses-by-parent'
-import { convertAmount } from '@/lib/currency/rates'
+import { getRatesForPairs } from '@/lib/currency/rates'
 import { Amount } from '@/components/app/amount'
 import { BudgetProgressCard } from '@/components/app/budget-progress'
 import { CategoryBreakdown } from '@/components/app/category-breakdown'
@@ -43,7 +40,6 @@ export default async function DashboardPage() {
   const baseCurrency = (profile?.baseCurrency ?? 'COP') as CurrencyCode
   const [
     accountsList,
-    totalSnapshot,
     recent,
     budgets,
     unreadInsights,
@@ -51,17 +47,43 @@ export default async function DashboardPage() {
     expensesByParent,
   ] = await Promise.all([
     listAccountsWithBalance(user.id),
-    getTotalBalanceInBase(user.id, baseCurrency),
     listTransactionsForUser(user.id, { limit: 5 }),
     listBudgetsWithProgress(user.id),
     listUnreadInsights(user.id, 3),
     getDebtsSummary(user.id, baseCurrency),
     getExpensesByParentCategory(user.id, baseCurrency),
   ])
-  const totalBase = totalSnapshot.total
 
-  // Deuda de tarjetas (saldo negativo en accounts.credit_card) convertida a base.
+  // Una sola query para todas las tasas que el dashboard necesita: saldo
+  // total + deuda de tarjetas comparten el mismo set de pares non-base→base.
   const today = new Date().toISOString().slice(0, 10)
+  const ratePairs = accountsList
+    .filter((a) => a.currency !== baseCurrency)
+    .map((a) => ({ from: a.currency, to: baseCurrency }))
+  const rates =
+    ratePairs.length > 0
+      ? await getRatesForPairs(ratePairs, today)
+      : new Map<string, string>()
+
+  let totalNum = 0
+  let totalPartial = false
+  for (const acc of accountsList) {
+    const bal = Number.parseFloat(acc.currentBalance)
+    if (acc.currency === baseCurrency) {
+      totalNum += bal
+      continue
+    }
+    const rate = rates.get(`${acc.currency}->${baseCurrency}`)
+    if (rate === undefined) {
+      totalPartial = true
+      totalNum += bal
+      continue
+    }
+    totalNum += bal * Number.parseFloat(rate)
+  }
+  const totalBase = totalNum.toFixed(2)
+  const totalSnapshot = { total: totalBase, partial: totalPartial }
+
   let creditCardDebtInBase = 0
   for (const a of accountsList) {
     if (a.type !== 'credit_card') continue
@@ -72,14 +94,8 @@ export default async function DashboardPage() {
       creditCardDebtInBase += owed
       continue
     }
-    const conv = await convertAmount(
-      String(owed),
-      a.currency,
-      baseCurrency,
-      today,
-      { fallbackToOne: true },
-    )
-    creditCardDebtInBase += Number.parseFloat(conv.amount)
+    const rate = rates.get(`${a.currency}->${baseCurrency}`)
+    creditCardDebtInBase += rate ? owed * Number.parseFloat(rate) : owed
   }
 
   // Presupuestos a destacar: primero exceeded, luego warning, luego safe por % desc.

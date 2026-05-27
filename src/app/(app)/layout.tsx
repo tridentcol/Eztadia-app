@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { cookies } from 'next/headers'
 
 import { requireCurrentUser } from '@/lib/auth'
@@ -7,18 +8,9 @@ import { MobileNav } from '@/components/app/mobile-nav'
 import { Topbar } from '@/components/app/topbar'
 import { CommandPalette } from '@/components/app/command-palette'
 import { NewAccountDialog } from '@/components/app/new-account-dialog'
-import { NewTransactionDialog } from '@/components/app/new-transaction-dialog'
-import { NewCategoryDialog } from '@/components/app/new-category-dialog'
-import { EditCategoryDialog } from '@/components/app/edit-category-dialog'
-import { NewBudgetDialog } from '@/components/app/new-budget-dialog'
-import { NewGoalDialog } from '@/components/app/new-goal-dialog'
-import { NewRecurringDialog } from '@/components/app/new-recurring-dialog'
 import { NewDebtDialog } from '@/components/app/new-debt-dialog'
 import { CopilotDialog } from '@/components/app/copilot-dialog'
-import {
-  listAvailableCategories,
-  listUserAccountsBasic,
-} from '@/lib/db/queries/transactions'
+import { DialogsBundle } from '@/components/app/dialogs-bundle'
 import { countUnreadAlerts } from '@/lib/db/queries/alerts'
 
 export default async function AppLayout({
@@ -28,13 +20,10 @@ export default async function AppLayout({
 }>) {
   const user = await requireCurrentUser()
 
-  const [accountsForForm, categoriesForForm, unreadAlerts, cookieStore] =
-    await Promise.all([
-      listUserAccountsBasic(user.id),
-      listAvailableCategories(user.id),
-      countUnreadAlerts(user.id),
-      cookies(),
-    ])
+  const [unreadAlerts, cookieStore] = await Promise.all([
+    countUnreadAlerts(user.id),
+    cookies(),
+  ])
   const sidebarDefault = cookieStore.get('sidebar_state')?.value !== 'false'
 
   return (
@@ -49,24 +38,11 @@ export default async function AppLayout({
       <MobileNav />
       <CommandPalette />
       <NewAccountDialog />
-      <NewTransactionDialog
-        accounts={accountsForForm}
-        categories={categoriesForForm}
-      />
-      <NewCategoryDialog categories={categoriesForForm} />
-      <EditCategoryDialog categories={categoriesForForm} />
-      <NewBudgetDialog categories={categoriesForForm} />
-      <NewGoalDialog accounts={accountsForForm} />
-      <NewRecurringDialog
-        accounts={accountsForForm}
-        categories={categoriesForForm.map((c) => ({
-          id: c.id,
-          name: c.name,
-          kind: c.kind,
-        }))}
-      />
       <NewDebtDialog />
       <CopilotDialog />
+      <Suspense fallback={null}>
+        <DialogsBundle />
+      </Suspense>
     </SidebarProvider>
   )
 }

@@ -151,6 +151,63 @@ export async function getRate(
 }
 
 /**
+ * Resuelve N pares from→to en UNA sola query. Devuelve un Map keyed por
+ * `${from}→${to}` con la tasa string ('1.000000' para pares identidad).
+ *
+ * Equivalente a llamar getRate por cada par, pero sin el waterfall de N
+ * round-trips. Útil cuando un caller (dashboard, getTotalBalanceInBase)
+ * necesita convertir varios montos a la misma moneda base de golpe.
+ *
+ * Mantiene el mismo contrato de fallback que getRate: DISTINCT ON toma la
+ * última tasa ≤ date por par, incluso si los pares cubren fechas distintas
+ * (cron caído etc.). Pares sin registro no aparecen en el map — el caller
+ * decide cómo manejar la ausencia.
+ */
+export async function getRatesForPairs(
+  pairs: Array<{ from: string; to: string }>,
+  date: string,
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  const queryPairs: Array<{ from: string; to: string }> = []
+  const seen = new Set<string>()
+  for (const p of pairs) {
+    const key = `${p.from}->${p.to}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    if (p.from === p.to) {
+      out.set(key, '1.000000')
+      continue
+    }
+    queryPairs.push(p)
+  }
+  if (queryPairs.length === 0) return out
+
+  const values = sql.join(
+    queryPairs.map((p) => sql`(${p.from}::text, ${p.to}::text)`),
+    sql`, `,
+  )
+  const rows = await db.execute<{
+    from_currency: string
+    to_currency: string
+    rate: string
+  }>(sql`
+    WITH pairs(from_currency, to_currency) AS (
+      VALUES ${values}
+    )
+    SELECT DISTINCT ON (er.from_currency, er.to_currency)
+      er.from_currency, er.to_currency, er.rate::text AS rate
+    FROM exchange_rates er
+    JOIN pairs p USING (from_currency, to_currency)
+    WHERE er.date <= ${date}
+    ORDER BY er.from_currency, er.to_currency, er.date DESC
+  `)
+  for (const r of rows) {
+    out.set(`${r.from_currency}->${r.to_currency}`, r.rate)
+  }
+  return out
+}
+
+/**
  * Convierte un monto string usando la tasa from→to del día.
  * Resultado redondeado a 2 decimales (matchea numeric(15,2) de amount_base).
  * Si no hay tasa disponible y `fallbackToOne` es true, asume 1:1 y deja el
