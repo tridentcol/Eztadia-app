@@ -29,6 +29,7 @@ Next.js 16 (App Router) + TypeScript strict + Tailwind v4 + shadcn/ui + Supabase
 - `src/components/ui/` — shadcn primitivos customizados al sistema Noir
 - `src/components/app/` — Componentes de dominio (rail, command, insight-card, amount, chart)
 - `src/components/copilot/` — Copiloto Finanzia (Cmd+K → IA)
+- `src/components/brand/` — Sistema de marca: `BrandMark` (símbolo SVG Horizonte) y `BrandWordmark` (Sora 500). Único lugar autorizado para Sora.
 - `src/lib/db/` — Drizzle schema + queries
 - `src/lib/ai/` — Vercel AI SDK client, prompts, tools, pipelines
 - `src/lib/currency/` — Formato, conversión, tasas
@@ -68,14 +69,15 @@ Next.js 16 (App Router) + TypeScript strict + Tailwind v4 + shadcn/ui + Supabase
 
 ### Mandato Estético
 
-**Anti-dashboard genérico. Anti-AI-template colorido.** Premium fintech, editorial, minimalista. Referencias: Linear, Mercury, Arc, Raycast, Stripe Dashboard. Cero emojis. Cero gradientes. Cero glow. Cero ilustraciones 3D. Tipografía como protagonista — los números son los héroes. Color restrained, casi monocromático. Acento único `#B8A6F5` solo para presencia de IA.
+**Anti-dashboard genérico. Anti-AI-template colorido.** Premium fintech, editorial, minimalista. Referencias: Linear, Mercury, Arc, Raycast, Stripe Dashboard. Cero emojis. Cero gradientes. Cero glow. Cero ilustraciones 3D. Tipografía como protagonista — los números son los héroes. Color restrained, casi monocromático. Dos acentos disciplinados: `#B8A6F5` lavanda **solo para presencia de IA** (sparkles, copilot, focus rings), y la **familia morada del brand** Horizonte (`--brand-purple-{strong,deep,soft}`) **solo para identidad de marca y estados sutiles** (logo, hover/active sidebar tintados con color-mix al 6-18%, indicador bottom-nav, watermark landing). Nunca botones primarios — esos siguen siendo `--text` sobre `--bg` estilo Linear/Mercury.
 
 ### Colors (dark — default)
 
 - `bg` #0A0A0B · `surface` #141416 · `surface-elevated` #1C1C1F · `surface-hover` #222226
 - `border` #26262A · `border-emphasis` #34343A
 - `text` #FAFAFA · `text-secondary` #A1A1A8 · `text-tertiary` #6B6B72
-- `accent-ai` #B8A6F5 (único acento — solo para IA)
+- `accent-ai` #B8A6F5 (acento IA — sparkles, copilot, focus)
+- `brand-purple-strong` #7C3AED · `brand-purple-deep` #4C1D95 · `brand-purple-soft` #A78BFA (familia marca Horizonte — logo + hover/active sidebar + indicador bottom-nav)
 - `positive` #7FB89F · `negative` #D4938A · `warning` #D4B58A
 - Cero saturación alta. Cero color en botones primarios genéricos.
 
@@ -92,6 +94,7 @@ Next.js 16 (App Router) + TypeScript strict + Tailwind v4 + shadcn/ui + Supabase
 - Body: Inter 13–16px, weight 400
 - **Números: Geist Mono** con `font-variant-numeric: tabular-nums` — siempre
 - Editorial: Fraunces italic — SOLO en empty states y copy onboarding (parsimonia)
+- **Wordmark de marca: Sora 500** lowercase tracking -0.05em line-height 1 — exclusivo del `BrandWordmark` component. **Nunca usar Sora fuera del lockup de marca.**
 
 ### Spacing & Radius
 
@@ -136,6 +139,7 @@ Validadas con Zod en `src/lib/env.ts`. Si falta una, la app no inicia.
 3. **Cero gradientes, glow, glassmorphism exagerado, shimmer, parallax, particles, confetti, bouncy springs.**
 4. **Dinero nunca como `number` flotante.** Drizzle `numeric(15,2)` + dinero.js en aplicación.
 5. **Toda transacción guarda original + base currency.** Mostrar siempre el contexto multi-divisa cuando aplica.
+5a. **Las tarjetas de crédito viven en `accounts.type='credit_card'`. Las demás deudas (préstamos, hipotecas, etc.) viven en la tabla `debts`.** La página `/deudas` unifica visualmente ambos modelos. No migrar tarjetas a `debts`.
 6. **El LLM nunca muta datos sin confirmación UI.** Tool calls que mutan retornan propuesta; usuario confirma; entonces Server Action ejecuta.
 7. **RLS habilitada en toda tabla con `user_id`.** Sin excepciones.
 8. **Todo lo público del cliente puede leer datos solo via anon key + RLS** — la `service_role_key` jamás se expone al cliente.
