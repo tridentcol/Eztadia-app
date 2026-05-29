@@ -122,11 +122,11 @@ export default async function DashboardPage() {
   const featuredInsight = unreadInsights[0] ?? null
   const activeRules = recurringRules.filter((r) => r.active)
 
-  // Lo siguiente: pago de deuda próximo si hay, sino primer evento del
-  // cash flow proyectado (recurrente que cae).
+  // Proyección a 30 días — alimenta tanto "Lo siguiente" (primer evento)
+  // como el CashFlowTeaser que muestra el saldo proyectado.
   const cashFlowPoints =
     activeRules.length > 0
-      ? projectCashFlow(recurringRules, totalNum, 14, { volatility })
+      ? projectCashFlow(recurringRules, totalNum, 30, { volatility })
       : null
   const nextRecurringEvent = cashFlowPoints
     ?.slice(1)
