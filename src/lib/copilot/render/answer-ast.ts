@@ -124,6 +124,39 @@ export type ProposalAction =
     }
   | { kind: 'navigate'; label: string; href: string }
   | { kind: 'mark-insight-read'; label: string; insightId: string }
+  // Propuestas emitidas por el LLM (tools propose-*): llevan el payload validado
+  // por el tool; la UI confirma y dispara la server action real. Regla 6.
+  | {
+      kind: 'confirm-transaction'
+      label: string
+      /** Texto legible para el ConfirmDialog. */
+      summary: string
+      proposal: {
+        kind: 'income' | 'expense' | 'transfer'
+        accountId: string
+        transferAccountId?: string | null
+        categoryId?: string | null
+        date: string
+        amount: string
+        currency: string
+        description: string
+        merchant?: string | null
+        notes?: string | null
+      }
+    }
+  | {
+      kind: 'confirm-budget'
+      label: string
+      summary: string
+      proposal: {
+        mode: 'create' | 'update'
+        existingBudgetId?: string | null
+        categoryId: string
+        amount: string
+        period: 'monthly' | 'weekly' | 'yearly'
+        rollover: boolean
+      }
+    }
 
 export type AnswerPayload = {
   intro?: string
