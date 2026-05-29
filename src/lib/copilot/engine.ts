@@ -1,11 +1,12 @@
 import 'server-only'
 
 import type { AnswerPayload } from './render/answer-ast'
-import type { EngineContext, SlotKey, Slots } from './intents/types'
+import type { EngineContext, IntentId, SlotKey, Slots } from './intents/types'
 import { INTENT_CATALOG } from './intents/catalog'
 import { RESOLVERS } from './intents/registry'
 import { tokenize } from './nlu/tokenize'
 import { classify, type ClassifierResult } from './nlu/intent-classifier'
+import { classifySemantic, type SemanticResult } from './nlu/semantic-classifier'
 import { extractPeriod } from './nlu/slots/period'
 import { extractMoney } from './nlu/slots/money'
 import { extractOrdering } from './nlu/slots/ordering'
@@ -39,6 +40,26 @@ export type EngineResult = {
   /** Intent finalmente ejecutado (puede diferir si hubo elipsis). */
   resolvedIntent: string
   viaEllipsis: boolean
+}
+
+/** Similitud coseno mínima para que el semántico pueda pisar al keyword. */
+const SEMANTIC_MIN = 0.5
+/** IntentIds válidos (los del catálogo); gatea los `intent` del corpus. */
+const VALID_INTENTS = new Set<string>(INTENT_CATALOG.map((m) => m.id))
+
+/** Construye un ClassifierResult sintético a partir del resultado semántico. */
+function fromSemantic(sem: SemanticResult): ClassifierResult {
+  return {
+    intent: sem.top as IntentId,
+    confidence: sem.confidence,
+    // Score sintético sobre la misma escala que el keyword (saturación 4) para
+    // que los thresholds aguas abajo se comporten.
+    score: sem.confidence * 4,
+    decision: 'execute',
+    ranking: sem.ranking
+      .filter((r) => VALID_INTENTS.has(r.intent))
+      .map((r) => ({ intent: r.intent as IntentId, score: r.score, confidence: r.score })),
+  }
 }
 
 function presentKeys(slots: Slots): Set<SlotKey> {
@@ -131,6 +152,28 @@ async function analyze(
     if (merchant) {
       slots.merchant = merchant
       classification = classify(tokens, presentKeys(slots), INTENT_CATALOG)
+    }
+  }
+
+  // Fusión semántica: solo cuando el keyword duda (≤0.6), pagamos el embedding.
+  // Si hay un match por significado más fuerte y válido, pisa al keyword.
+  if (classification.confidence <= 0.6) {
+    const sem = await classifySemantic(message, ctx)
+    if (process.env.FINANZIA_COPILOT_DEBUG === '1') {
+      console.log('[copilot:fusion]', {
+        kw: classification.intent,
+        kwConf: Number(classification.confidence.toFixed(2)),
+        sem: sem?.top ?? null,
+        semConf: sem ? Number(sem.confidence.toFixed(2)) : null,
+      })
+    }
+    if (
+      sem &&
+      VALID_INTENTS.has(sem.top) &&
+      sem.confidence >= SEMANTIC_MIN &&
+      sem.confidence >= classification.confidence
+    ) {
+      classification = fromSemantic(sem)
     }
   }
 
