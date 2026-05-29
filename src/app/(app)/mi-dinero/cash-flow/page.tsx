@@ -112,8 +112,10 @@ export default async function CashFlowPage() {
   const runwayDays =
     dailyExpense > 0 ? Math.floor(startingBalance / dailyExpense) : null
 
-  // Breakdown de gastos recurrentes activos por categoría.
+  // Breakdown de gastos e ingresos recurrentes activos por categoría.
   const expenseRules = activeRules.filter((r) => r.kind === 'expense')
+  const incomeRules = activeRules.filter((r) => r.kind === 'income')
+
   const monthlyEquivalent = (r: RuleListItem): number => {
     const amt = Number.parseFloat(r.amount)
     switch (r.frequency) {
@@ -131,18 +133,38 @@ export default async function CashFlowPage() {
         return amt / 12
     }
   }
-  const byCategory = new Map<string, { label: string; total: number }>()
-  for (const r of expenseRules) {
-    const key = r.categoryName ?? 'Sin categoría'
-    const entry = byCategory.get(key) ?? { label: key, total: 0 }
-    entry.total += monthlyEquivalent(r)
-    byCategory.set(key, entry)
+
+  type Breakdown = {
+    entries: Array<{ label: string; total: number; description?: string }>
+    max: number
+    sum: number
   }
-  const categoryTotals = Array.from(byCategory.values()).sort(
-    (a, b) => b.total - a.total,
-  )
-  const maxCategoryTotal = Math.max(1, ...categoryTotals.map((c) => c.total))
-  const sumCategoryTotals = categoryTotals.reduce((acc, c) => acc + c.total, 0)
+
+  const breakdownByCategory = (
+    rules: RuleListItem[],
+    /** Si true, usa description individual cuando no hay category. Útil
+     *  para income donde una sola regla suele ser "Salario" sin categoría. */
+    fallbackToDescription = false,
+  ): Breakdown => {
+    const map = new Map<string, { label: string; total: number; description?: string }>()
+    for (const r of rules) {
+      const key =
+        r.categoryName ??
+        (fallbackToDescription ? r.description : 'Sin categoría')
+      const entry = map.get(key) ?? { label: key, total: 0 }
+      entry.total += monthlyEquivalent(r)
+      map.set(key, entry)
+    }
+    const entries = Array.from(map.values()).sort((a, b) => b.total - a.total)
+    return {
+      entries,
+      max: Math.max(1, ...entries.map((e) => e.total)),
+      sum: entries.reduce((acc, e) => acc + e.total, 0),
+    }
+  }
+
+  const expensesBreakdown = breakdownByCategory(expenseRules, false)
+  const incomesBreakdown = breakdownByCategory(incomeRules, true)
 
   // Próximos eventos para la lista de detalle.
   const upcoming = points
@@ -281,71 +303,28 @@ export default async function CashFlowPage() {
             </p>
           </section>
 
-          {/* Breakdown de gastos recurrentes por categoría */}
-          {categoryTotals.length > 0 && (
-            <section className="flex flex-col gap-4">
-              <header className="flex items-baseline justify-between">
-                <h2 className="text-text text-sm font-semibold">
-                  Gastos recurrentes por categoría
-                </h2>
-                <span className="text-text-tertiary text-[11px] uppercase tracking-[0.08em]">
-                  Equivalente mensual
-                </span>
-              </header>
-              <div className="border-border-default bg-surface flex flex-col gap-4 rounded-[12px] border p-5">
-                <ul className="flex flex-col gap-3">
-                  {categoryTotals.map((c) => {
-                    const widthPct = Math.max(
-                      2,
-                      (c.total / maxCategoryTotal) * 100,
-                    )
-                    const sharePct =
-                      sumCategoryTotals > 0
-                        ? Math.round((c.total / sumCategoryTotals) * 100)
-                        : 0
-                    return (
-                      <li
-                        key={c.label}
-                        className="flex flex-col gap-1.5"
-                      >
-                        <div className="flex items-baseline justify-between gap-3">
-                          <span className="text-text truncate text-[13px]">
-                            {c.label}
-                          </span>
-                          <span className="text-text-secondary tabular shrink-0 text-[12px]">
-                            {formatMoney(c.total, {
-                              currency: baseCurrency,
-                              compact: true,
-                            })}
-                            <span className="text-text-tertiary ml-2 text-[11px]">
-                              {sharePct}%
-                            </span>
-                          </span>
-                        </div>
-                        <div className="bg-surface-hover h-1 overflow-hidden rounded-full">
-                          <div
-                            aria-hidden
-                            className="h-full rounded-full"
-                            style={{
-                              width: `${widthPct}%`,
-                              background: 'var(--purple-base)',
-                            }}
-                          />
-                        </div>
-                      </li>
-                    )
-                  })}
-                </ul>
-                <p className="text-text-tertiary text-[11px]">
-                  Total mensual de recurrentes:{' '}
-                  <span className="text-text-secondary tabular">
-                    {formatMoney(sumCategoryTotals, {
-                      currency: baseCurrency,
-                      compact: true,
-                    })}
-                  </span>
-                </p>
-              </div>
+          {/* Breakdowns paralelos: ingresos y gastos recurrentes */}
+          {(incomesBreakdown.entries.length > 0 ||
+            expensesBreakdown.entries.length > 0) && (
+            <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              {incomesBreakdown.entries.length > 0 && (
+                <BreakdownCard
+                  title="Ingresos recurrentes"
+                  breakdown={incomesBreakdown}
+                  currency={baseCurrency}
+                  tone="positive"
+                  emptyHint={null}
+                />
+              )}
+              {expensesBreakdown.entries.length > 0 && (
+                <BreakdownCard
+                  title="Gastos recurrentes"
+                  breakdown={expensesBreakdown}
+                  currency={baseCurrency}
+                  tone="brand"
+                  emptyHint={null}
+                />
+              )}
             </section>
           )}
 
@@ -356,6 +335,85 @@ export default async function CashFlowPage() {
         </>
       )}
     </div>
+  )
+}
+
+type BreakdownData = {
+  entries: Array<{ label: string; total: number; description?: string }>
+  max: number
+  sum: number
+}
+
+function BreakdownCard({
+  title,
+  breakdown,
+  currency,
+  tone,
+  emptyHint,
+}: {
+  title: string
+  breakdown: BreakdownData
+  currency: CurrencyCode
+  tone: 'positive' | 'brand'
+  emptyHint: string | null
+}) {
+  const barColor =
+    tone === 'positive' ? 'var(--positive)' : 'var(--purple-base)'
+
+  return (
+    <section className="flex flex-col gap-3">
+      <header className="flex items-baseline justify-between">
+        <h2 className="text-text text-sm font-semibold">{title}</h2>
+        <span className="text-text-tertiary text-[11px] uppercase tracking-[0.08em]">
+          Equiv. mensual
+        </span>
+      </header>
+      <div className="border-border-default bg-surface flex flex-col gap-4 rounded-[12px] border p-5">
+        {breakdown.entries.length === 0 && emptyHint ? (
+          <p className="text-text-tertiary text-[12px]">{emptyHint}</p>
+        ) : (
+          <ul className="flex flex-col gap-3">
+            {breakdown.entries.map((c) => {
+              const widthPct = Math.max(2, (c.total / breakdown.max) * 100)
+              const sharePct =
+                breakdown.sum > 0
+                  ? Math.round((c.total / breakdown.sum) * 100)
+                  : 0
+              return (
+                <li key={c.label} className="flex flex-col gap-1.5">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-text truncate text-[13px]">
+                      {c.label}
+                    </span>
+                    <span className="text-text-secondary tabular shrink-0 text-[12px]">
+                      {formatMoney(c.total, { currency, compact: true })}
+                      <span className="text-text-tertiary ml-2 text-[11px]">
+                        {sharePct}%
+                      </span>
+                    </span>
+                  </div>
+                  <div className="bg-surface-hover h-1 overflow-hidden rounded-full">
+                    <div
+                      aria-hidden
+                      className="h-full rounded-full"
+                      style={{ width: `${widthPct}%`, background: barColor }}
+                    />
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+        {breakdown.entries.length > 0 && (
+          <p className="text-text-tertiary text-[11px]">
+            Total mensual:{' '}
+            <span className="text-text-secondary tabular">
+              {formatMoney(breakdown.sum, { currency, compact: true })}
+            </span>
+          </p>
+        )}
+      </div>
+    </section>
   )
 }
 

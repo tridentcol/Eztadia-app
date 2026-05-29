@@ -20,7 +20,10 @@ export type MerchantRow = {
   totalBase: string
   count: number
   lastSeen: string
+  categoryId: string | null
   categoryName: string | null
+  categoryColor: string | null
+  categoryIcon: string | null
 }
 
 type Row = {
@@ -29,7 +32,10 @@ type Row = {
   total_base: string
   count: number
   last_seen: string
+  category_id: string | null
   category_name: string | null
+  category_color: string | null
+  category_icon: string | null
 }
 
 export type MerchantsRange = {
@@ -120,7 +126,10 @@ export async function listMerchantsForUser(
       g.total_base,
       g.count,
       g.last_seen,
-      c.name AS category_name
+      c.id AS category_id,
+      c.name AS category_name,
+      c.color AS category_color,
+      c.icon AS category_icon
     FROM grouped g
     LEFT JOIN category_ranks cr ON cr.slug_raw = g.slug_raw AND cr.rk = 1
     LEFT JOIN categories c ON c.id = cr.category_id
@@ -134,6 +143,9 @@ export async function listMerchantsForUser(
     totalBase: Number.parseFloat(r.total_base).toFixed(2),
     count: r.count,
     lastSeen: r.last_seen,
+    categoryId: r.category_id,
     categoryName: r.category_name,
+    categoryColor: r.category_color,
+    categoryIcon: r.category_icon,
   }))
 }
