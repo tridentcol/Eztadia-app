@@ -218,10 +218,12 @@ export async function runEngine(
   }
 
   const entities = extractEntities(resolved.intent, payload)
+  // Si el turno quedó esperando un slot requerido, lo recordamos para retomarlo.
+  const pendingIntent = resolved.decision === 'clarify-slot' ? resolved.intent : undefined
   const nextContext = pushTurn(
     context,
     { utterance: message, intent: resolved.intent, slots: resolved.slots },
-    { entities },
+    { entities, pendingIntent },
   )
 
   return {

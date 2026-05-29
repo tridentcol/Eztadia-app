@@ -95,6 +95,22 @@ describe('resolveTurn — sin contexto', () => {
   })
 })
 
+describe('resolveTurn — retomar intent pendiente', () => {
+  it('responder la aclaración con un slot reanuda el intent', () => {
+    const ctx: ConversationContext = {
+      lastIntent: 'account-detail',
+      lastSlots: {},
+      turnHistory: [],
+      lastEntities: [],
+      pendingIntent: 'account-detail',
+    }
+    const slots: Slots = { account: { id: 'a2', name: 'Ahorros', type: 'savings' } }
+    const r = run('la de ahorros', slots, weak('help'), ctx)
+    expect(r.intent).toBe('account-detail')
+    expect(r.slots.account?.id).toBe('a2')
+  })
+})
+
 describe('resolveTurn — referencias', () => {
   const ctxMerchants: ConversationContext = {
     lastIntent: 'top-merchants',

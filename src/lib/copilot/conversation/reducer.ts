@@ -151,6 +151,17 @@ export function resolveTurn(params: {
   const weak =
     classification.decision === 'fallback' || classification.confidence <= 0.4
 
+  // Retomar un intent que quedó esperando un slot: si el usuario responde la
+  // aclaración (turno débil que aporta un slot), reanudamos ese intent.
+  if (context.pendingIntent && weak && hasSlot) {
+    return {
+      intent: context.pendingIntent,
+      slots: mergeSlots(context.lastSlots, slots),
+      decision: 'execute',
+      viaEllipsis: true,
+    }
+  }
+
   // Es un follow-up del hilo si arranca con conector o si la señal es débil
   // pero trae un slot reconocible. En ambos casos heredamos los slots previos.
   const isFollowUp =
