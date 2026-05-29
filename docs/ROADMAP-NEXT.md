@@ -5,6 +5,8 @@
 > Acumula todas las ideas validadas por el usuario + las decisiones tomadas durante la planeación.
 >
 > Si una fase contradice este archivo después de implementarse, **se actualiza este archivo**, no el código.
+>
+> **2026-05-29 — Step 19 + sprint UX:** el LLM (OpenAI gpt-5.4-mini) ya es el cerebro del copiloto (ver `docs/copilot-llm.md` + `docs/PROGRESS.md` Step 19). El plan forward vigente para el copiloto/app es **`docs/ux-sprint-plan.md`** (fases U1–U4: feedback de generación, formato markdown, layout mobile con copiloto protagonista, onboarding profundo). Este roadmap queda como histórico.
 
 ---
 

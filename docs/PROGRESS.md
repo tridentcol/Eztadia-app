@@ -5,7 +5,7 @@
 >
 > **Plan forward**: ver `docs/ROADMAP-NEXT.md` para el plan detallado de las próximas 6 fases (sprint de funcionalidades). Este archivo es retrospectivo (qué se hizo); el roadmap es prospectivo (qué viene).
 >
-> Última actualización: 2026-05-27 — **Step 18b** ✅ Savings Tracker + Proyección (Fase 2). Schema `savings_periods` + cron mensual `close-savings-period` + detector `savings-off-track` + página `/ahorro` con bar chart visx + forecast lineal ±1σ. Migración `0004_savings_periods` aplicada a prod. Fase 1 (onboarding) y catálogo tarjetas (13 bancos) también en esta sesión. Commits `7c212ad` + trabajo de hoy sin pushear. Plan: `docs/ROADMAP-NEXT.md`.
+> Última actualización: 2026-05-29 — **Step 19** ✅ LLM (OpenAI gpt-5.4-mini) como cerebro del copiloto + selector de motor en la UI. El copiloto ahora puede leer TODOS los datos del usuario vía un catálogo amplio de tools de lectura + `queryTransactions` (motor IR exacto), responde como asesor profesional es-CO con un *profile snapshot* inyectado, confirma mutaciones con tarjeta (proposeCreate/SetBudget), y el usuario elige el motor (Local por default, o un modelo de IA con key integrada) desde un selector discreto en el header del copiloto. Config por env `COPILOT_LLM_*`. 16 commits sin pushear (`git log origin/main..main`). 3 revisiones adversariales (workflows) con fixes. **Siguiente: sprint UX** detallado en `docs/ux-sprint-plan.md` (feedback de streaming humano, formato markdown de respuestas, onboarding profundo, nav mobile sin "Más", copiloto protagonista).
 
 ---
 
@@ -54,11 +54,28 @@
 | 17a | Foundation visual de tarjetas (parcial) | ✅ hecho — sin imágenes ni push |
 | 17b | Catálogo tarjetas ampliado (13 bancos) + decisiones sprint | ✅ hecho |
 | 18a | Onboarding + Perfil de Ahorro (Fase 1) | ✅ hecho |
+| 19a | LLM (OpenAI gpt-5.4-mini) como cerebro del copiloto | ✅ hecho | Config por env en `src/lib/ai/copilot/config.ts` (`COPILOT_LLM_PROVIDER` default openai, `COPILOT_LLM_MODEL` default gpt-5.4-mini, `REASONING_EFFORT` medium, `TEXT_VERBOSITY` low, `STORE` false, `FORCE_LLM` override operador). `resolveCopilotProvider` (openai scope chat / anthropic) + `runCopilotChat` con `providerOptions.openai` (reasoning/verbosity/store, sin temperature) + `stopWhen(8)`. Probe `pnpm probe:llm` (cae a gpt-5-mini). `@ai-sdk/openai@3.0.65` ya soporta gpt-5.4-mini + reasoning params (sin upgrade). Doc: `docs/copilot-llm.md`. |
+| 19b | Catálogo de tools de lectura + queryTransactions | ✅ hecho | Tools read-only compactos (filtran por userId): getBalance, getAccounts, listRecentTransactions, searchTransactions, **queryTransactions** (reusa el motor IR `src/lib/copilot/query/*` → cifras EXACTAS), getBudgetStatus, getDebts, listRecurring, getSavings, listGoals, getTopMerchants, getCashFlow, listActiveInsights, getAdvice (corre los detectores locales en vivo). `propose-*` intactos (mutación con confirmación). |
+| 19c | Profile snapshot + system prompt asesor + confirm-card LLM | ✅ hecho | `src/lib/ai/copilot/profile-snapshot.ts` (compacto, reusa queries, Promise.allSettled) inyectado al system prompt reescrito a asesor financiero es-CO/COP/Noir. Tarjeta de confirmación para propuestas del LLM: `llm-to-ast.ts` detecta tool-outputs proposeCreateTransaction/proposeSetBudget → ProposalAction → AnswerActions confirma vía server actions existentes (guard anti-doble-registro). |
+| 19d | Selector de motor en el copiloto (default Local) | ✅ hecho | `aiProfile.copilot.routing` ('local' default \| 'llm'); el route va al LLM solo si routing='llm' o COPILOT_FORCE_LLM (sin auto-defer). DropdownMenu discreto en el header del copiloto (`src/components/copilot/engine-menu.tsx`): el badge muestra el modelo (punto lavanda) o "Local"; lista solo modelos con key integrada (Vault scope chat o key operador). Actions `getCopilotChoices`/`setCopilotEngine` (atómicas, FOR UPDATE). Se eliminó el selector de Ajustes (consolidado en el copiloto). 3 revisiones adversariales (workflows) con fixes (catálogo modelo↔provider, lectura de perfil deduplicada, lost-update, back-compat de routing, header mobile encogible). |
 | 18b | Savings Tracker Histórico + Proyección (Fase 2) | ✅ hecho | Migración `0002_card_visual_identity.sql` añade a `accounts` cinco columnas opcionales (`bank_slug`, `card_product_slug`, `card_brand`, `card_last_four`, `card_holder_name`) — aplicada a prod via Supabase MCP. `kind` (credit/debit) se deriva de `account.type`, no se almacena. Catálogo curado `src/lib/cards/catalog.ts` con 9 bancos colombianos (Bancolombia, Davivienda, Nu, RappiCard, Falabella, BBVA, Scotiabank Colpatria, Banco de Bogotá, "Otro") y ~22 productos crédito/débito; helpers `findCardProduct` / `findBank`. `<CardVisual>` (client component, aspect 1.585:1, Next/Image con onError → placeholder neutral con wordmark cuando la imagen no existe en disco). `NewAccountDialog` rediseñado con sección "Identidad visual" cascada (banco → producto → red → últimos 4 + titular) y preview vivo. `/cuentas` y `/deudas` muestran `<CardVisual>` arriba del card cuando `bankSlug` está set. `/public/cards/README.md` documenta naming + specs. **Pendiente**: dropear imágenes en `/public/cards/`, dialog de edición visual para cuentas existentes, push del commit `7c212ad`. El plan completo Fase 4 (incluido 4b motor + Vision, 4c mecánica, 4d analizador) vive en `docs/ROADMAP-NEXT.md`. |
 
 ---
 
 ## Next action
+
+**Sprint UX del copiloto/app** (2026-05-29) — plan detallado en **`docs/ux-sprint-plan.md`**. Cinco frentes priorizando experiencia de usuario:
+1. Feedback de generación humano (no solo 3 puntos): estado en vivo mapeado a los tool-calls del stream.
+2. Formato de respuestas: renderizar markdown (listas, pasos, párrafos) en el camino LLM — hoy `llm-to-ast.ts` mete todo en un bloque de texto plano.
+3. Onboarding de alto impacto: perfil profundo (riesgo, personalidad financiera, metas, horizonte) → `aiProfile` → snapshot.
+4. Nav mobile sin pantalla "Más": 4 secciones posesivas + copiloto en el bottom-nav.
+5. Copiloto protagonista en mobile: FAB central = copiloto; registrar movimiento sube al topbar; touch targets ≥44px.
+
+Para retomar, ver el prompt de continuación al final de `docs/ux-sprint-plan.md`.
+
+---
+
+### Operativo pendiente (pre-existente)
 
 **Solo polish + go-live final.**
 
