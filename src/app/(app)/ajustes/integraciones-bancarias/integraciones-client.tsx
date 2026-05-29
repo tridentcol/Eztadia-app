@@ -21,6 +21,9 @@ import {
 } from './bank-config'
 
 const EMAIL_DOMAIN = 'inbox.finanzia.app'
+// Sentinel para "sin cuenta vinculada". Radix Select prohíbe value="" porque
+// reserva la cadena vacía para limpiar la selección y mostrar el placeholder.
+const NO_ACCOUNT = '__none__'
 
 type Alias = {
   id: string
@@ -42,13 +45,13 @@ export function IntegracionesBancariasClient({ aliases, accounts }: Props) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [selectedBank, setSelectedBank] = useState<SupportedBank>('bancolombia')
-  const [selectedAccount, setSelectedAccount] = useState<string>('')
+  const [selectedAccount, setSelectedAccount] = useState<string>(NO_ACCOUNT)
 
   function handleCreate() {
     startTransition(async () => {
       const result = await createEmailAlias({
         bank: selectedBank,
-        accountId: selectedAccount || null,
+        accountId: selectedAccount && selectedAccount !== NO_ACCOUNT ? selectedAccount : null,
       })
       if (!result.ok) {
         toast.error(result.error.message)
@@ -161,7 +164,7 @@ export function IntegracionesBancariasClient({ aliases, accounts }: Props) {
                 <SelectValue placeholder="Sin vincular" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Sin vincular</SelectItem>
+                <SelectItem value={NO_ACCOUNT}>Sin vincular</SelectItem>
                 {accounts.map((a) => (
                   <SelectItem key={a.id} value={a.id}>
                     {a.name} · {a.currency}
