@@ -160,12 +160,14 @@ function NewTransactionForm({
     [categories, kind],
   )
 
-  // Si cambian kind y la categoría ya no aplica, la limpiamos.
-  useEffect(() => {
-    if (categoryId && !eligibleCategories.some((c) => c.id === categoryId)) {
-      setCategoryId('')
-    }
-  }, [eligibleCategories, categoryId])
+  // Si cambian kind y la categoría ya no aplica, derivamos la categoría
+  // "efectiva" sin setState: si el id seleccionado no está en las
+  // elegibles para el kind actual, lo tratamos como vacío en el render.
+  // Cuando el usuario elija una nueva categoría, el state pisa esto.
+  const effectiveCategoryId =
+    categoryId && eligibleCategories.some((c) => c.id === categoryId)
+      ? categoryId
+      : ''
 
   const isCreditCard = account?.type === 'credit_card'
   const meta = KIND_META[kind]
@@ -202,7 +204,7 @@ function NewTransactionForm({
         kind,
         accountId,
         transferAccountId: kind === 'transfer' ? transferAccountId : null,
-        categoryId: categoryId || null,
+        categoryId: effectiveCategoryId || null,
         date,
         amountOriginal: amount,
         currency: account.currency as 'COP',
@@ -358,7 +360,7 @@ function NewTransactionForm({
                 Categoría
               </label>
               <Select
-                value={categoryId || 'NONE'}
+                value={effectiveCategoryId || 'NONE'}
                 onValueChange={(v) => setCategoryId(v === 'NONE' ? '' : v)}
                 disabled={eligibleCategories.length === 0}
               >

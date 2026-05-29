@@ -26,6 +26,9 @@ export type TransactionFilters = {
   kind?: 'income' | 'expense' | 'transfer'
   accountId?: string
   categoryId?: string
+  /** Slug normalizado (lower, trimmed) — matchea contra LOWER(TRIM(merchant)) o
+   *  LOWER(TRIM(description)) cuando merchant es NULL. */
+  merchantSlug?: string
   /** YYYY-MM-DD */
   from?: string
   /** YYYY-MM-DD */
@@ -47,6 +50,11 @@ export async function listTransactionsForUser(
   if (filters.kind) conditions.push(eq(transactions.kind, filters.kind))
   if (filters.accountId) conditions.push(eq(transactions.accountId, filters.accountId))
   if (filters.categoryId) conditions.push(eq(transactions.categoryId, filters.categoryId))
+  if (filters.merchantSlug) {
+    conditions.push(
+      sql`LOWER(TRIM(COALESCE(NULLIF(${transactions.merchant}, ''), ${transactions.description}))) = ${filters.merchantSlug}`,
+    )
+  }
   if (filters.from) conditions.push(gte(transactions.date, filters.from))
   if (filters.to) conditions.push(lte(transactions.date, filters.to))
 

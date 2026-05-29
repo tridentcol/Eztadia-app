@@ -4,6 +4,7 @@ import { SectionTabs, type SectionTab } from '@/components/app/section-tabs'
 
 const TABS: SectionTab[] = [
   { label: 'Insights', href: '/mi-historia/insights' },
+  { label: 'Comercios', href: '/mi-historia/comercios' },
   { label: 'Informes', href: '/mi-historia/informes' },
 ]
 

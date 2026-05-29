@@ -28,6 +28,8 @@ type SearchParams = Promise<{
   accountId?: string
   day?: string
   import?: string
+  /** Filtro por comercio — slug normalizado, set desde /mi-historia/comercios. */
+  merchant?: string
 }>
 
 const kindFilters: Array<{
@@ -70,14 +72,16 @@ export default async function TransaccionesPage({
   })()
 
   const dayFilter = /^\d{4}-\d{2}-\d{2}$/.test(params.day ?? '') ? params.day : undefined
+  const merchantFilter = params.merchant?.trim() ? params.merchant.trim().toLowerCase() : undefined
 
   const [list, available, unclassified, accounts, batches] = await Promise.all([
     listTransactionsForUser(user.id, {
       kind: dayFilter ? undefined : kind,
       accountId: params.accountId,
+      merchantSlug: merchantFilter,
       from: dayFilter,
       to: dayFilter,
-      limit: dayFilter ? 500 : 200,
+      limit: dayFilter ? 500 : merchantFilter ? 500 : 200,
     }),
     listAvailableCategories(user.id),
     dayFilter ? Promise.resolve(0) : countUnclassifiedTransactions(user.id),
