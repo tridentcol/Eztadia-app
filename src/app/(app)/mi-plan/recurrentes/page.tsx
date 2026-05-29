@@ -5,9 +5,11 @@ import {
   getRecurringDriftSnapshots,
   listRecurringForUser,
 } from '@/lib/db/queries/recurring'
+import { proposeRecurringRules } from '@/lib/recurring/proposals'
 import { EmptyState } from '@/components/app/empty-state'
 import { NewRecurringTrigger } from '@/components/app/new-recurring-trigger'
 import { RecurringList } from '@/components/app/recurring-list'
+import { ProposedRecurringList } from '@/components/app/proposed-recurring-list'
 
 export const metadata: Metadata = {
   title: 'Recurrentes',
@@ -19,7 +21,10 @@ export default async function RecurringPage() {
   const driftRuleIds = list
     .filter((r) => r.active && r.dayOfMonth !== null)
     .map((r) => r.id)
-  const driftSnapshots = await getRecurringDriftSnapshots(user.id, driftRuleIds)
+  const [driftSnapshots, proposals] = await Promise.all([
+    getRecurringDriftSnapshots(user.id, driftRuleIds),
+    proposeRecurringRules(user.id),
+  ])
 
   return (
     <div className="flex min-w-0 flex-col gap-10 lg:gap-12">
@@ -37,6 +42,8 @@ export default async function RecurringPage() {
         </div>
         <NewRecurringTrigger />
       </header>
+
+      <ProposedRecurringList proposals={proposals} />
 
       {list.length === 0 ? (
         <EmptyState
