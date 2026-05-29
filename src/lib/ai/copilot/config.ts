@@ -25,7 +25,11 @@ export type CopilotLlmConfig = {
   textVerbosity: TextVerbosity
   /** OpenAI guarda el hilo (Responses API). Default false por privacidad. */
   store: boolean
-  /** Si true, el route salta el ruteo local-first y manda todo al LLM. */
+  /**
+   * Override de operador (env COPILOT_FORCE_LLM): fuerza el LLM aunque el usuario
+   * tenga routing 'local'. Es un gate paralelo a routing==='llm', no un bypass de
+   * auto-defer (ese auto-defer ya no existe; 'local' nunca escala a IA por sí solo).
+   */
   forceLLM: boolean
 }
 
@@ -142,6 +146,9 @@ export function parseCopilotOverride(raw: unknown): CopilotUserOverride | null {
   if (r.textVerbosity === 'low' || r.textVerbosity === 'medium' || r.textVerbosity === 'high') {
     out.textVerbosity = r.textVerbosity
   }
+  // Back-compat: registros viejos guardaban provider+model SIN routing (cuando
+  // tener un modelo implicaba usar IA). Preserva esa intención → routing 'llm'.
+  if (!out.routing && out.provider && out.model) out.routing = 'llm'
   return Object.keys(out).length > 0 ? out : null
 }
 
