@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { cookies } from 'next/headers'
 import { Inter, Geist_Mono, Fraunces, Sora } from 'next/font/google'
 import { ClerkProvider } from '@clerk/nextjs'
 import { esES } from '@clerk/localizations'
@@ -7,6 +8,7 @@ import { Toaster } from 'sonner'
 import './globals.css'
 import { clerkAppearance } from '@/lib/clerk-appearance'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { ThemeProvider, type Theme } from '@/components/app/theme-provider'
 
 const inter = Inter({
   variable: '--font-sans',
@@ -46,33 +48,42 @@ export const metadata: Metadata = {
   description: 'Finanzas personales con IA.',
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  // Lee la cookie del tema server-side para aplicar la clase inicial al
+  // <html> y evitar flash entre modo claro/oscuro durante hidratación.
+  const cookieStore = await cookies()
+  const stored = cookieStore.get('finanzia_theme')?.value
+  const theme: Theme = stored === 'light' ? 'light' : 'dark'
+  const isDark = theme === 'dark'
+
   return (
     <html
       lang="es"
-      className={`dark ${inter.variable} ${geistMono.variable} ${fraunces.variable} ${sora.variable} h-full antialiased`}
+      className={`${isDark ? 'dark ' : ''}${inter.variable} ${geistMono.variable} ${fraunces.variable} ${sora.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <body className="bg-background text-foreground flex min-h-full flex-col">
-        <ClerkProvider appearance={clerkAppearance} localization={esES}>
-          <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
-        </ClerkProvider>
-        <Toaster
-          theme="dark"
-          position="top-center"
-          offset={20}
-          toastOptions={{
-            classNames: {
-              toast:
-                'border-border-default bg-surface-elevated text-text rounded-[12px] border shadow-none',
-              description: 'text-text-secondary',
-            },
-          }}
-        />
+        <ThemeProvider initialTheme={theme}>
+          <ClerkProvider appearance={clerkAppearance} localization={esES}>
+            <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
+          </ClerkProvider>
+          <Toaster
+            theme={theme}
+            position="top-center"
+            offset={20}
+            toastOptions={{
+              classNames: {
+                toast:
+                  'border-border-default bg-surface-elevated text-text rounded-[12px] border shadow-none',
+                description: 'text-text-secondary',
+              },
+            }}
+          />
+        </ThemeProvider>
       </body>
     </html>
   )

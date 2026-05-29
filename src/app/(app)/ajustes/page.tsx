@@ -10,6 +10,7 @@ import { CategoriasSection } from '@/components/app/settings/categorias-section'
 import { IntegracionesBancariasSection } from '@/components/app/settings/integraciones-bancarias-section'
 import { IntegracionesIASection } from '@/components/app/settings/integraciones-ia-section'
 import { AlertasSection } from '@/components/app/settings/alertas-section'
+import { AparienciaSection } from '@/components/app/settings/apariencia-section'
 import { SesionSection } from '@/components/app/settings/sesion-section'
 
 export const metadata: Metadata = {
@@ -38,6 +39,7 @@ const SECTIONS: Section[] = [
     description: 'Tus claves Anthropic / OpenAI',
   },
   { id: 'alertas', label: 'Alertas', description: 'Bandeja accionable' },
+  { id: 'apariencia', label: 'Apariencia', description: 'Modo oscuro o claro' },
   { id: 'sesion', label: 'Sesión', description: 'Cuenta y datos básicos' },
 ]
 
@@ -160,6 +162,8 @@ async function SectionContent({
       return <IntegracionesIASection userId={user.id} />
     case 'alertas':
       return <AlertasSection userId={user.id} />
+    case 'apariencia':
+      return <AparienciaSection />
     case 'sesion':
       return (
         <SesionSection
