@@ -6,6 +6,10 @@ import {
   listRecurringForUser,
 } from '@/lib/db/queries/recurring'
 import { proposeRecurringRules } from '@/lib/recurring/proposals'
+import {
+  listAvailableCategories,
+  listUserAccountsBasic,
+} from '@/lib/db/queries/transactions'
 import { EmptyState } from '@/components/app/empty-state'
 import { NewRecurringTrigger } from '@/components/app/new-recurring-trigger'
 import { RecurringList } from '@/components/app/recurring-list'
@@ -21,7 +25,7 @@ export default async function RecurringPage() {
   const driftRuleIds = list
     .filter((r) => r.active && r.dayOfMonth !== null)
     .map((r) => r.id)
-  const [driftSnapshots, proposals] = await Promise.all([
+  const [driftSnapshots, proposals, accountsRaw, categoriesRaw] = await Promise.all([
     getRecurringDriftSnapshots(user.id, driftRuleIds),
     // Si la propuesta falla por cualquier razón (query, RLS, datos
     // inconsistentes), la página no debe romper — fallback a [].
@@ -29,7 +33,20 @@ export default async function RecurringPage() {
       console.error('proposeRecurringRules failed:', err)
       return []
     }),
+    listUserAccountsBasic(user.id),
+    listAvailableCategories(user.id),
   ])
+
+  const editableAccounts = accountsRaw.map((a) => ({
+    id: a.id,
+    name: a.name,
+    currency: a.currency,
+  }))
+  const editableCategories = categoriesRaw.map((c) => ({
+    id: c.id,
+    name: c.name,
+    kind: c.kind,
+  }))
 
   return (
     <div className="flex min-w-0 flex-col gap-10 lg:gap-12">
@@ -57,7 +74,12 @@ export default async function RecurringPage() {
           action={<NewRecurringTrigger />}
         />
       ) : (
-        <RecurringList rules={list} driftSnapshots={driftSnapshots} />
+        <RecurringList
+          rules={list}
+          driftSnapshots={driftSnapshots}
+          accounts={editableAccounts}
+          categories={editableCategories}
+        />
       )}
     </div>
   )

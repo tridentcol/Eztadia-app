@@ -1,6 +1,6 @@
 'use client'
 
-import { useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 
@@ -17,6 +17,15 @@ import type {
 import { icons } from '@/lib/design/icons'
 import { cn } from '@/lib/utils'
 import { RecurringDriftTimeline } from './recurring-drift-timeline'
+import { EditRecurringDialog } from './edit-recurring-dialog'
+import { ConfirmDialog } from './confirm-dialog'
+
+type AccountOption = { id: string; name: string; currency: string }
+type CategoryOption = {
+  id: string
+  name: string
+  kind: 'income' | 'expense' | 'transfer'
+}
 
 const freqLabel: Record<RecurringRuleListItem['frequency'], string> = {
   daily: 'Diaria',
@@ -70,13 +79,23 @@ function classifyRule(r: RecurringRuleListItem): GroupKey {
 export function RecurringList({
   rules,
   driftSnapshots = [],
+  accounts,
+  categories,
 }: {
   rules: RecurringRuleListItem[]
   driftSnapshots?: RecurringDriftSnapshot[]
+  accounts: AccountOption[]
+  categories: CategoryOption[]
 }) {
   const snapshotById = new Map(driftSnapshots.map((s) => [s.ruleId, s]))
   const router = useRouter()
   const [pending, startTransition] = useTransition()
+  const [editingRule, setEditingRule] = useState<RecurringRuleListItem | null>(
+    null,
+  )
+  const [confirmingRule, setConfirmingRule] = useState<RecurringRuleListItem | null>(
+    null,
+  )
 
   function onToggle(id: string) {
     startTransition(async () => {
@@ -86,11 +105,25 @@ export function RecurringList({
     })
   }
 
-  function onDelete(id: string) {
-    if (!confirm('Eliminar esta regla?')) return
+  function onEdit(rule: RecurringRuleListItem) {
+    setEditingRule(rule)
+  }
+
+  function onAskDelete(rule: RecurringRuleListItem) {
+    setConfirmingRule(rule)
+  }
+
+  function onConfirmDelete() {
+    if (!confirmingRule) return
+    const id = confirmingRule.id
     startTransition(async () => {
       const res = await deleteRecurringRule(id)
-      if (!res.ok) toast.error(res.error.message)
+      if (!res.ok) {
+        toast.error(res.error.message)
+        return
+      }
+      toast.success('Regla eliminada.')
+      setConfirmingRule(null)
       router.refresh()
     })
   }
@@ -165,13 +198,53 @@ export function RecurringList({
                   pending={pending}
                   snapshot={snapshotById.get(r.id)}
                   onToggle={onToggle}
-                  onDelete={onDelete}
+                  onEdit={onEdit}
+                  onDelete={onAskDelete}
                 />
               ))}
             </ul>
           </section>
         )
       })}
+
+      <EditRecurringDialog
+        open={editingRule !== null}
+        onOpenChange={(o) => !o && setEditingRule(null)}
+        rule={
+          editingRule
+            ? {
+                id: editingRule.id,
+                description: editingRule.description,
+                accountId: editingRule.accountId,
+                categoryId: editingRule.categoryId,
+                amount: editingRule.amount,
+                kind: editingRule.kind as 'income' | 'expense',
+                frequency: editingRule.frequency,
+                nextRun: editingRule.nextRun ?? new Date().toISOString().slice(0, 10),
+                autoCreate: editingRule.autoCreate,
+              }
+            : null
+        }
+        accounts={accounts}
+        categories={categories}
+      />
+
+      <ConfirmDialog
+        open={confirmingRule !== null}
+        onOpenChange={(o) => !o && setConfirmingRule(null)}
+        title="¿Eliminar regla recurrente?"
+        description={
+          <>
+            <span className="text-text">{confirmingRule?.description}</span>
+            <br />
+            Dejará de proyectarse en cash flow y de crear movimientos
+            automáticamente. Los movimientos ya creados se conservan.
+          </>
+        }
+        confirmLabel="Eliminar"
+        tone="danger"
+        onConfirm={onConfirmDelete}
+      />
     </div>
   )
 }
@@ -181,13 +254,15 @@ function RuleItem({
   pending,
   snapshot: snap,
   onToggle,
+  onEdit,
   onDelete,
 }: {
   rule: RecurringRuleListItem
   pending: boolean
   snapshot: RecurringDriftSnapshot | undefined
   onToggle: (id: string) => void
-  onDelete: (id: string) => void
+  onEdit: (rule: RecurringRuleListItem) => void
+  onDelete: (rule: RecurringRuleListItem) => void
 }) {
   const Repeat = icons.repeat
   const showTimeline = r.active && r.dayOfMonth !== null && r.frequency === 'monthly'
@@ -230,6 +305,15 @@ function RuleItem({
             type="button"
             variant="ghost"
             size="sm"
+            onClick={() => onEdit(r)}
+            disabled={pending}
+          >
+            Editar
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
             onClick={() => onToggle(r.id)}
             disabled={pending}
           >
@@ -239,7 +323,7 @@ function RuleItem({
             type="button"
             variant="ghost"
             size="sm"
-            onClick={() => onDelete(r.id)}
+            onClick={() => onDelete(r)}
             disabled={pending}
           >
             Eliminar

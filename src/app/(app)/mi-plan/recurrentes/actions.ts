@@ -107,6 +107,107 @@ export async function createRecurringRule(
   return { ok: true, data: { id: row.id } }
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Update recurring rule
+// ──────────────────────────────────────────────────────────────────────
+
+const updateSchema = z.object({
+  id: z.string().uuid(),
+  description: z.string().trim().min(1).max(120),
+  accountId: z.string().uuid(),
+  categoryId: z.string().uuid().nullable().optional(),
+  amount: z.string().regex(/^\d+(\.\d{1,2})?$/),
+  kind: z.enum(['income', 'expense']),
+  frequency: z.enum(['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly']),
+  nextRun: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  autoCreate: z.boolean(),
+})
+
+export type UpdateRecurringInput = z.input<typeof updateSchema>
+
+export async function updateRecurringRule(
+  input: UpdateRecurringInput,
+): Promise<ActionResult> {
+  const user = await requireCurrentUser()
+  const parsed = updateSchema.safeParse(input)
+  if (!parsed.success) {
+    const fields: Record<string, string> = {}
+    for (const issue of parsed.error.issues) {
+      const key = issue.path.join('.')
+      if (key) fields[key] = issue.message
+    }
+    return {
+      ok: false,
+      error: { code: 'validation', message: 'Revisa los campos.', fields },
+    }
+  }
+  const data = parsed.data
+
+  const existing = await db.query.recurringRules.findFirst({
+    where: and(
+      eq(recurringRules.id, data.id),
+      eq(recurringRules.userId, user.id),
+    ),
+  })
+  if (!existing) {
+    return { ok: false, error: { code: 'not_found', message: 'No encontrada.' } }
+  }
+
+  // Inferir dayOfMonth/dayOfWeek del nextRun como hace createRecurringRule.
+  const needsDayOfMonth =
+    data.frequency === 'monthly' ||
+    data.frequency === 'quarterly' ||
+    data.frequency === 'yearly'
+  const needsDayOfWeek = data.frequency === 'weekly' || data.frequency === 'biweekly'
+  const dayOfMonth = needsDayOfMonth
+    ? Number.parseInt(data.nextRun.slice(8, 10), 10)
+    : null
+  const dayOfWeek = needsDayOfWeek
+    ? new Date(`${data.nextRun}T00:00:00Z`).getUTCDay()
+    : null
+
+  const account = await db.query.accounts.findFirst({
+    where: and(eq(accounts.id, data.accountId), eq(accounts.userId, user.id)),
+  })
+  if (!account) {
+    return { ok: false, error: { code: 'invalid_account', message: 'Cuenta inválida.' } }
+  }
+
+  if (data.categoryId) {
+    const cat = await db.query.categories.findFirst({
+      where: and(
+        eq(categories.id, data.categoryId),
+        eq(categories.kind, data.kind),
+        or(isNull(categories.userId), eq(categories.userId, user.id)),
+      ),
+    })
+    if (!cat) {
+      return { ok: false, error: { code: 'invalid_category', message: 'Categoría inválida.' } }
+    }
+  }
+
+  await db
+    .update(recurringRules)
+    .set({
+      description: data.description,
+      accountId: data.accountId,
+      categoryId: data.categoryId ?? null,
+      amount: data.amount,
+      currency: account.currency,
+      kind: data.kind,
+      frequency: data.frequency,
+      dayOfMonth,
+      dayOfWeek,
+      nextRun: data.nextRun,
+      autoCreate: data.autoCreate,
+    })
+    .where(eq(recurringRules.id, data.id))
+
+  revalidatePath('/mi-plan/recurrentes')
+  revalidatePath('/mi-dinero/cash-flow')
+  return { ok: true, data: undefined }
+}
+
 export async function toggleRecurringRule(id: string): Promise<ActionResult> {
   const user = await requireCurrentUser()
   const row = await db.query.recurringRules.findFirst({
