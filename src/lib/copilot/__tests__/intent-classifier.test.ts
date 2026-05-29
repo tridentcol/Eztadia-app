@@ -139,6 +139,13 @@ const CORPUS: Array<[string, IntentId]> = [
   ['dinero dormido', 'dormant-money'],
   ['cuentas sin usar', 'dormant-money'],
 
+  // advice
+  ['¿qué me recomiendas?', 'advice'],
+  ['¿qué me recomendás?', 'advice'],
+  ['¿dónde puedo ahorrar?', 'advice'],
+  ['dame consejos', 'advice'],
+  ['¿cómo puedo mejorar mis finanzas?', 'advice'],
+
   // help
   ['ayuda', 'help'],
   ['¿qué sabes hacer?', 'help'],
