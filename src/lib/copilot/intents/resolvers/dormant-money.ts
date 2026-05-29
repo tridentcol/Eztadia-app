@@ -1,7 +1,8 @@
 import 'server-only'
+import { sql } from 'drizzle-orm'
 
+import { db } from '@/lib/db/client'
 import { listAccountsWithBalance } from '@/lib/db/queries/accounts'
-import { listTransactionsForUser } from '@/lib/db/queries/transactions'
 import type { IntentResolver } from '../types'
 import { money } from '../helpers'
 
@@ -18,15 +19,18 @@ export const resolveDormantMoney: IntentResolver = async (_slots, ctx) => {
   cutoff.setUTCDate(cutoff.getUTCDate() - DORMANT_DAYS)
   const cutoffIso = cutoff.toISOString().slice(0, 10)
 
-  const checks = await Promise.all(
-    liquid.map(async (a) => {
-      const last = await listTransactionsForUser(ctx.userId, { accountId: a.id, limit: 1 })
-      const lastDate = last[0]?.date ?? null
-      return { account: a, lastDate }
-    }),
-  )
+  // Una sola query con la última actividad por cuenta (en vez de N consultas).
+  const activity = await db.execute<{ account_id: string; last: string | null }>(sql`
+    SELECT account_id, MAX(date)::text AS last
+    FROM transactions
+    WHERE user_id = ${ctx.userId} AND deleted_at IS NULL
+    GROUP BY account_id
+  `)
+  const lastByAccount = new Map(activity.map((r) => [r.account_id, r.last]))
 
-  const dormant = checks.filter((c) => c.lastDate === null || c.lastDate < cutoffIso)
+  const dormant = liquid
+    .map((account) => ({ account, lastDate: lastByAccount.get(account.id) ?? null }))
+    .filter((c) => c.lastDate === null || c.lastDate < cutoffIso)
 
   if (dormant.length === 0) {
     return {
