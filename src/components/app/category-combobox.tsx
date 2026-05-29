@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { icons } from '@/lib/design/icons'
 import { cn } from '@/lib/utils'
@@ -20,17 +20,19 @@ type Props = {
 }
 
 /**
- * Select de categoría con buscador inline. La lista se expande dentro del
- * form (no usa Portal/Popover) para evitar bugs de scroll y posicionamiento
- * en mobile/dialogs anidados:
+ * Select de categoría con buscador. Doble comportamiento por viewport:
  *
- * - Wheel scroll funciona nativamente — la lista vive en el flujo normal del
- *   form, sin overlay que intercepte eventos.
- * - En mobile el input + lista siempre se ven; el form padre maneja overflow
- *   con su propio scroll.
- * - Sin Portal — sin issues de z-index ni de touch events que se pierden.
+ * - Desktop (md+): el panel se monta sobrepuesto al form (position
+ *   absolute desde el wrapper relative). No empuja contenido debajo.
+ * - Mobile (<md): el panel se expande inline empujando el contenido —
+ *   en mobile el dialog del form ya scrollea y los popovers sobre dialogs
+ *   anidados causan bugs de touch.
  *
- * Filtrado: substring case-insensitive sobre name. Tab/Escape cierra.
+ * Filtrado: substring case-insensitive sobre name. Escape cierra, click
+ * fuera cierra.
+ *
+ * iOS Safari: el input usa font-size 16px explícito para prevenir el
+ * auto-zoom al focus (Safari hace zoom cuando el input tiene <16px).
  */
 export function CategoryCombobox({
   options,
@@ -43,6 +45,7 @@ export function CategoryCombobox({
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+  const wrapperRef = useRef<HTMLDivElement>(null)
   const ChevronDown = icons['chevron-down']
   const Check = icons.check
   const Search = icons.search
@@ -56,10 +59,22 @@ export function CategoryCombobox({
     return options.filter((o) => o.name.toLowerCase().includes(q))
   }, [options, query])
 
+  // Click fuera cierra el panel.
+  useEffect(() => {
+    if (!open) return
+    function handlePointerDown(e: PointerEvent) {
+      if (!wrapperRef.current) return
+      if (wrapperRef.current.contains(e.target as Node)) return
+      setOpen(false)
+      setQuery('')
+    }
+    document.addEventListener('pointerdown', handlePointerDown)
+    return () => document.removeEventListener('pointerdown', handlePointerDown)
+  }, [open])
+
   function openPanel() {
     setOpen(true)
     setQuery('')
-    // Focus al input justo después de mount.
     setTimeout(() => inputRef.current?.focus(), 0)
   }
 
@@ -74,7 +89,7 @@ export function CategoryCombobox({
   }
 
   return (
-    <div className="flex flex-col gap-1">
+    <div ref={wrapperRef} className="relative flex flex-col gap-1">
       <button
         type="button"
         disabled={disabled}
@@ -99,10 +114,12 @@ export function CategoryCombobox({
 
       {open && (
         <div
-          className="border-border-default bg-surface-elevated overflow-hidden rounded-[10px] border"
-          // Stop event propagation so clicks/touches dentro del panel no
-          // disparen comportamientos del Dialog padre.
-          onMouseDown={(e) => e.stopPropagation()}
+          className={cn(
+            'border-border-default bg-surface-elevated overflow-hidden rounded-[10px] border',
+            // Desktop: sobrepuesto, no empuja el form.
+            // Mobile: inline en flujo normal del form.
+            'md:absolute md:top-full md:right-0 md:left-0 md:z-50 md:mt-1 md:shadow-xl',
+          )}
         >
           <div className="border-border-default flex items-center gap-2 border-b px-3">
             <Search
@@ -121,7 +138,9 @@ export function CategoryCombobox({
               }}
               placeholder="Buscar categoría…"
               aria-label="Buscar categoría"
-              className="text-text placeholder:text-text-tertiary flex-1 bg-transparent py-2.5 text-sm outline-none"
+              // text-[16px] previene el auto-zoom de iOS Safari al focus.
+              // En md+ bajamos a text-sm que se ve más proporcional.
+              className="text-text placeholder:text-text-tertiary flex-1 bg-transparent py-2.5 text-[16px] outline-none md:text-sm"
             />
           </div>
 

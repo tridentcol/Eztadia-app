@@ -210,23 +210,15 @@ function formatDaysShort(days: number): string {
 }
 
 function CardListItem({ card: c }: { card: CardRow }) {
-  const limit = Number.parseFloat(c.creditLimit ?? '0')
-  const balance = Number.parseFloat(c.currentBalance)
-  const used = balance < 0 ? -balance : 0
-  const available = limit - used
-  const utilization = limit > 0 ? Math.min(1, used / limit) : 0
-  const tone =
-    utilization >= 0.9
-      ? 'bg-negative'
-      : utilization >= 0.6
-        ? 'bg-warning'
-        : 'bg-text'
-  const stD = daysToMonthDay(c.statementDay)
-  const pyD = daysToMonthDay(c.paymentDay)
-
+  // Listado compacto: sólo la tarjeta + link al detalle. Saldo, cupo,
+  // utilización y fechas viven en /mi-dinero/tarjetas/[id] — entrar al
+  // detalle es un solo tap.
   return (
-    <article className="border-border-default bg-surface flex min-w-0 flex-col gap-5 rounded-[12px] border p-5">
-      <div className="mx-auto w-full max-w-[260px]">
+    <Link
+      href={`/mi-dinero/tarjetas/${c.id}`}
+      className="group flex min-w-0 flex-col gap-3 transition-opacity hover:opacity-90"
+    >
+      <div className="w-full">
         <CardVisual
           bankSlug={c.bankSlug}
           kind="credit"
@@ -237,89 +229,15 @@ function CardListItem({ card: c }: { card: CardRow }) {
           showMeta={false}
         />
       </div>
-
-      <header className="flex items-start justify-between gap-3">
-        <Link
-          href={`/mi-dinero/tarjetas/${c.id}`}
-          className="flex min-w-0 flex-col gap-0.5 hover:opacity-80 transition-opacity"
-        >
-          <span className="text-text truncate text-sm font-semibold">
-            {c.name}
-          </span>
-          <span className="text-text-tertiary text-[11px] uppercase tracking-[0.08em]">
-            {c.cardLastFour ? `···· ${c.cardLastFour}` : 'Tarjeta de crédito'}
-          </span>
-        </Link>
-        <span className="text-text-tertiary shrink-0 text-[11px] tracking-wider">
-          {c.currency}
+      <div className="flex items-baseline justify-between gap-3 px-1">
+        <span className="text-text truncate text-[13px] font-medium">
+          {c.name}
         </span>
-      </header>
-
-      <div className="flex flex-col gap-1">
-        <span className="text-text-tertiary text-[11px] uppercase tracking-[0.08em]">
-          Adeudado
+        <span className="text-text-tertiary group-hover:text-text-secondary inline-flex items-center gap-1 text-[12px] transition-colors">
+          Ver detalle
+          <span aria-hidden>→</span>
         </span>
-        <Amount
-          value={String(used)}
-          currency={c.currency}
-          kind={used > 0 ? 'negative' : 'neutral'}
-          className="text-2xl"
-        />
       </div>
-
-      {limit > 0 && (
-        <div className="border-border-default/60 flex flex-col gap-3 border-t pt-3 text-[12px]">
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="text-text-tertiary">Utilizado</span>
-            <span className="text-text-secondary tabular">
-              {Math.round(utilization * 100)}%
-            </span>
-          </div>
-          <div className="bg-surface-hover h-1 overflow-hidden rounded-full">
-            <div
-              aria-hidden
-              className={`h-full rounded-full transition-all ${tone}`}
-              style={{ width: `${utilization * 100}%` }}
-            />
-          </div>
-          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
-            <dt className="text-text-tertiary">Disponible</dt>
-            <dd className="text-text-secondary truncate text-right tabular">
-              {formatMoney(available, { currency: c.currency, compact: true })}
-            </dd>
-            <dt className="text-text-tertiary">Cupo</dt>
-            <dd className="text-text-secondary truncate text-right tabular">
-              {formatMoney(limit, { currency: c.currency, compact: true })}
-            </dd>
-            {c.statementDay && (
-              <>
-                <dt className="text-text-tertiary">Corte</dt>
-                <dd className="text-text-secondary truncate text-right tabular">
-                  día {c.statementDay} · {stD === null ? '' : formatDaysShort(stD)}
-                </dd>
-              </>
-            )}
-            {c.paymentDay && (
-              <>
-                <dt className="text-text-tertiary">Pago</dt>
-                <dd className="text-text-secondary truncate text-right tabular">
-                  día {c.paymentDay} · {pyD === null ? '' : formatDaysShort(pyD)}
-                </dd>
-              </>
-            )}
-          </dl>
-        </div>
-      )}
-
-      <Link
-        href={`/mi-dinero/tarjetas/${c.id}`}
-        className="text-text-secondary hover:text-text border-border-default/60 -mb-1 inline-flex items-center justify-between border-t pt-3 text-[13px] transition-colors"
-      >
-        Detalle
-        <span className="text-text-tertiary text-[11px]" aria-hidden>
-          →
-        </span>
-      </Link>
-    </article>
+    </Link>
   )
 }
