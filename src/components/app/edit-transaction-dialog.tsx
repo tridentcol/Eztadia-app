@@ -215,23 +215,17 @@ function EditTransactionForm({
             <label className="text-text-tertiary text-[11px] uppercase tracking-[0.08em]">
               Cuenta
             </label>
-            <Select value={accountId} onValueChange={setAccountId}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {accounts.map((a) => (
-                  <SelectItem key={a.id} value={a.id}>
-                    <span className="flex items-center gap-2">
-                      <span>{a.name}</span>
-                      <span className="text-text-tertiary text-[11px]">
-                        {ACCOUNT_TYPE_LABEL[a.type] ?? a.type} · {a.currency}
-                      </span>
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <CategoryCombobox
+              options={accounts.map((a) => ({
+                id: a.id,
+                name: a.name,
+                subtitle: `${ACCOUNT_TYPE_LABEL[a.type] ?? a.type} · ${a.currency}`,
+              }))}
+              value={accountId}
+              onChange={setAccountId}
+              placeholder="Cuenta"
+              emptyLabel="Cuenta"
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-text-tertiary text-[11px] uppercase tracking-[0.08em]">
