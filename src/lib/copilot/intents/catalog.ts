@@ -113,6 +113,12 @@ export const INTENT_CATALOG: IntentMeta[] = [
     slotsExpected: [],
   },
   {
+    id: 'data-query',
+    keywords: ['cuantas transacciones', 'promedio', 'agrupado', 'por mes', 'numero de'],
+    patterns: [/\b(cuantas transacciones|promedio (diario|de gasto|por)|agrupad|por mes|por cuenta|numero de (compras|transacciones))\b/],
+    slotsExpected: [],
+  },
+  {
     id: 'help',
     keywords: ['ayuda', 'que sabes', 'que puedes', 'comandos', 'help', 'que puedo preguntar'],
     patterns: [/\b(ayuda|que (sabes|puedes|puedo preguntar)|comandos|help)\b/],

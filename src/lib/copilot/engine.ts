@@ -31,6 +31,10 @@ import {
   type ResolvedTurn,
 } from './conversation/reducer'
 import { buildFollowUps } from './conversation/follow-ups'
+import { parseQuery } from './query/parse'
+import { executeQuery } from './query/execute'
+import { queryToAnswer } from './query/to-answer'
+import { periodOrThisMonth } from './intents/helpers'
 
 export type EngineResult = {
   payload: AnswerPayload
@@ -204,6 +208,7 @@ export async function runEngine(
   const payload = await dispatch(resolved.intent, resolved.slots, resolved.decision, ctx, {
     missingSlot: resolved.missingSlot,
     alternative: resolved.alternative,
+    message,
   })
 
   if (resolved.decision === 'execute' && !payload.followUps) {
@@ -259,7 +264,7 @@ async function dispatch(
   slots: Slots,
   decision: ResolvedTurn['decision'],
   ctx: EngineContext,
-  extra: { missingSlot?: SlotKey; alternative?: string },
+  extra: { missingSlot?: SlotKey; alternative?: string; message: string },
 ): Promise<AnswerPayload> {
   if (slots.categoryCandidates && slots.categoryCandidates.length >= 2) {
     const [a, b] = slots.categoryCandidates
@@ -288,8 +293,30 @@ async function dispatch(
     }
   }
 
+  // data-query no vive en el registry (necesita el texto crudo): se parsea,
+  // ejecuta y renderiza con el motor componible. Si el parse no arma consulta,
+  // cae a spend-by-category como aproximación.
+  if (intent === 'data-query') {
+    try {
+      const period = periodOrThisMonth(slots, ctx)
+      const query = parseQuery(extra.message, slots, period)
+      if (query) {
+        const result = await executeQuery(query, ctx)
+        return queryToAnswer(query, result, ctx)
+      }
+    } catch (err) {
+      console.error('[copilot] data-query falló:', err)
+    }
+  }
+
   try {
-    const resolver = RESOLVERS[intent as keyof typeof RESOLVERS] ?? RESOLVERS.help
+    const resolver =
+      (intent !== 'data-query' ? RESOLVERS[intent as IntentId] : undefined) ??
+      RESOLVERS['spend-by-category'] ??
+      RESOLVERS.help
+    if (!resolver) {
+      return { intro: 'No pude resolver eso.', blocks: [{ type: 'text', body: 'Probá reformular.' }] }
+    }
     return await resolver(slots, ctx)
   } catch (err) {
     console.error('[copilot] resolver falló:', intent, err)

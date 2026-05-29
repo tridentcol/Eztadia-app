@@ -20,8 +20,11 @@ import { resolveDormantMoney } from './resolvers/dormant-money'
 import { resolveAdvice } from './resolvers/advice'
 import { resolveHelp } from './resolvers/help'
 
-/** Mapa IntentId → resolver server-side. Única fuente de despacho del engine. */
-export const RESOLVERS: Record<IntentId, IntentResolver> = {
+/**
+ * Mapa IntentId → resolver server-side. Parcial a propósito: `data-query` no
+ * tiene resolver aquí porque necesita el texto crudo; lo maneja el engine.
+ */
+export const RESOLVERS: Partial<Record<IntentId, IntentResolver>> = {
   'show-balance': resolveShowBalance,
   'account-detail': resolveAccountDetail,
   'spend-by-category': resolveSpendByCategory,
