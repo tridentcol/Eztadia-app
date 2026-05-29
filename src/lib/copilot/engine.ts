@@ -31,6 +31,7 @@ import {
   type ResolvedTurn,
 } from './conversation/reducer'
 import { buildFollowUps } from './conversation/follow-ups'
+import { extractEntities } from './conversation/entities'
 import { parseQuery, type ParseLists } from './query/parse'
 import { executeQuery, executeCompare } from './query/execute'
 import { queryToAnswer, compareToAnswer } from './query/to-answer'
@@ -216,11 +217,12 @@ export async function runEngine(
     if (followUps.length > 0) payload.followUps = followUps
   }
 
-  const nextContext = pushTurn(context, {
-    utterance: message,
-    intent: resolved.intent,
-    slots: resolved.slots,
-  })
+  const entities = extractEntities(resolved.intent, payload)
+  const nextContext = pushTurn(
+    context,
+    { utterance: message, intent: resolved.intent, slots: resolved.slots },
+    { entities },
+  )
 
   return {
     payload,

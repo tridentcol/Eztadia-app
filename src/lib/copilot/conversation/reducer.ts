@@ -13,17 +13,29 @@ export type TurnRecord = {
   slots: Slots
 }
 
+/** Entidad referenciable surgida de la última respuesta ("ese", "el segundo"). */
+export type ReferenceEntity = {
+  kind: 'transaction' | 'merchant' | 'category' | 'account'
+  label: string
+  id?: string
+}
+
 export type ConversationContext = {
   lastIntent: IntentId | null
   lastSlots: Slots
   /** Máximo 5 turnos, más reciente al final. */
   turnHistory: TurnRecord[]
+  /** Entidades de la última respuesta, en orden de aparición (máx 10). */
+  lastEntities: ReferenceEntity[]
+  /** Intent que quedó esperando un slot (para retomarlo en el próximo turno). */
+  pendingIntent?: IntentId
 }
 
 export const EMPTY_CONTEXT: ConversationContext = {
   lastIntent: null,
   lastSlots: {},
   turnHistory: [],
+  lastEntities: [],
 }
 
 const CONNECTOR_RE =
@@ -137,11 +149,14 @@ export function mergeSlots(prev: Slots, next: Slots): Slots {
 export function pushTurn(
   context: ConversationContext,
   record: TurnRecord,
+  options: { entities?: ReferenceEntity[]; pendingIntent?: IntentId } = {},
 ): ConversationContext {
   const turnHistory = [...context.turnHistory, record].slice(-5)
   return {
     lastIntent: record.intent,
     lastSlots: record.slots,
     turnHistory,
+    lastEntities: options.entities ?? [],
+    pendingIntent: options.pendingIntent,
   }
 }

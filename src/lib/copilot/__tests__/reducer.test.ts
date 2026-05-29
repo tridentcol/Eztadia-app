@@ -52,6 +52,7 @@ describe('resolveTurn — redirección de dimensión', () => {
     lastIntent: 'spend-by-category',
     lastSlots: { category: { id: 'c1', name: 'Mercado' }, period: PERIOD },
     turnHistory: [],
+    lastEntities: [],
   }
 
   it('"y comparado" → compare-month heredando categoría', () => {
@@ -71,6 +72,7 @@ describe('resolveTurn — redirección de dimensión', () => {
       lastIntent: 'show-balance',
       lastSlots: {},
       turnHistory: [],
+      lastEntities: [],
     }
     const slots: Slots = { account: { id: 'a1', name: 'Débito', type: 'checking' } }
     const r = run('y mi debito', slots, weak('help'), ctxBalance)
