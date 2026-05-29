@@ -161,22 +161,22 @@
 }
 
 /* ============================================================
-   Dark theme — Horizonte purple-tinted
-   Bg es purple-deepest del handoff (#2D1370). Surfaces se construyen
-   subiendo en luminosidad dentro de la familia morada — coherente con
-   el símbolo y el wordmark de marca, sin saturarse.
+   Dark theme — ink con tinte purple
+   Base es `ink #15102A` del handoff (negro con tinte morado, sin
+   saturarse). Surfaces suben muy ligeramente dentro de la misma familia
+   para conservar profundidad sin perder el carácter oscuro.
    ============================================================ */
 
 .dark {
-  --bg: #2D1370;             /* purple-deepest */
-  --surface: #3A1E84;        /* deepest + un toque, para cards/sidebar */
-  --surface-elevated: #45288F;/* aún más claro para popovers/modals */
-  --surface-hover: #43258B;
-  --border-default: #50369C; /* visible pero discreto sobre surfaces */
-  --border-emphasis: #6D52B5;
+  --bg: #15102A;             /* ink — casi negro, tinte purple sutil */
+  --surface: #1C1739;        /* +6% luminosidad para cards/sidebar */
+  --surface-elevated: #251F47;/* +10% para popovers/modals */
+  --surface-hover: #221C41;
+  --border-default: #2E2750; /* visible pero discreto */
+  --border-emphasis: #463B6E;
   --text: #F5F0FF;           /* blanco cremoso para no glare */
-  --text-secondary: #C4B5DE;
-  --text-tertiary: #8E7FB3;
+  --text-secondary: #B4A6CC;
+  --text-tertiary: #7A6FA0;
   --accent-ai: #B8A6F5;
   --positive: #7FB89F;
   --negative: #E89F95;

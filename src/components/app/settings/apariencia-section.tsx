@@ -78,7 +78,7 @@ function ThemePreview({ kind }: { kind: Theme }) {
   // Mini-paleta para que el usuario vea cómo se ve antes de aplicar.
   const swatches =
     kind === 'dark'
-      ? ['#2D1370', '#3A1E84', '#A78BFA', '#F5F0FF']
+      ? ['#15102A', '#1C1739', '#A78BFA', '#F5F0FF']
       : ['#FAFAFC', '#F2EDFF', '#DDD6FE', '#15102A']
   return (
     <>
