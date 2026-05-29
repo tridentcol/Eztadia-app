@@ -92,6 +92,7 @@ export type AnswerBlock =
       annotation?: string
     }
   | { type: 'event-list'; items: TimelineItem[] }
+  | { type: 'advice'; tone: Tone; title: string; body: string }
   | { type: 'text'; body: string }
 
 export type FollowUpChip = {

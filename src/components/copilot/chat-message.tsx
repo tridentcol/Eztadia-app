@@ -7,6 +7,7 @@ import { ListBlock } from './blocks/list-block'
 import { GaugeBlock } from './blocks/gauge-block'
 import { MiniChartBlock } from './blocks/mini-chart-block'
 import { EventListBlock } from './blocks/event-list-block'
+import { AdviceBlock } from './blocks/advice-block'
 import { TypingIndicator } from './typing-indicator'
 import { FollowUpChips } from './follow-up-chips'
 import { AnswerActions } from './answer-actions'
@@ -43,6 +44,8 @@ function BlockView({ block }: { block: AnswerBlock }) {
       return <MiniChartBlock points={block.points} annotation={block.annotation} />
     case 'event-list':
       return <EventListBlock items={block.items} />
+    case 'advice':
+      return <AdviceBlock tone={block.tone} title={block.title} body={block.body} />
     case 'text':
       return <p className="text-text-secondary text-[14px] leading-relaxed">{block.body}</p>
     default:
