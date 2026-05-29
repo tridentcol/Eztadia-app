@@ -1,21 +1,29 @@
 import type { Metadata } from 'next'
+import { eq } from 'drizzle-orm'
 
 import { requireCurrentUser } from '@/lib/auth'
 import { db } from '@/lib/db/client'
-import { eq } from 'drizzle-orm'
 import { profiles } from '@/lib/db/schema'
 import { listRecurringForUser } from '@/lib/db/queries/recurring'
-import { listAccountsWithBalance, getTotalBalanceInBase } from '@/lib/db/queries/accounts'
+import {
+  getTotalBalanceInBase,
+  listAccountsWithBalance,
+} from '@/lib/db/queries/accounts'
+import { getDebtsSummary } from '@/lib/db/queries/debts'
+import { getRatesForPairs } from '@/lib/currency/rates'
 import { projectCashFlow } from '@/lib/cash-flow/project'
 import { getDailyVolatility } from '@/lib/cash-flow/volatility'
 import { CashFlowChart } from '@/components/app/cash-flow-chart'
 import { Amount } from '@/components/app/amount'
 import { EmptyState } from '@/components/app/empty-state'
+import { formatMoney } from '@/lib/currency/format'
 import type { CurrencyCode } from '@/lib/currency/currencies'
 
 export const metadata: Metadata = {
-  title: 'Cash Flow',
+  title: 'Cash flow',
 }
+
+type RuleListItem = Awaited<ReturnType<typeof listRecurringForUser>>[number]
 
 export default async function CashFlowPage() {
   const user = await requireCurrentUser()
@@ -29,13 +37,54 @@ export default async function CashFlowPage() {
 
   const baseCurrency = (profile?.baseCurrency ?? 'COP') as CurrencyCode
 
-  const { total: totalBalanceStr } = await getTotalBalanceInBase(
-    user.id,
-    baseCurrency,
-    accountsList,
-  )
-  const startingBalance = Number.parseFloat(totalBalanceStr)
+  // ── Patrimonio neto ──────────────────────────────────────────────
+  // Activos = cuentas no-crédito en base.
+  // Pasivos = deuda en tarjetas + préstamos/hipotecas activas.
+  const ownedAccounts = accountsList.filter((a) => a.type !== 'credit_card')
+  const creditCards = accountsList.filter((a) => a.type === 'credit_card')
 
+  const [{ total: assetsBase, partial: assetsPartial }, debtsSummary] =
+    await Promise.all([
+      getTotalBalanceInBase(user.id, baseCurrency, ownedAccounts),
+      getDebtsSummary(user.id, baseCurrency),
+    ])
+
+  const today = new Date().toISOString().slice(0, 10)
+  const ccNonBase = creditCards.filter((c) => c.currency !== baseCurrency)
+  const ccRates =
+    ccNonBase.length > 0
+      ? await getRatesForPairs(
+          ccNonBase.map((c) => ({ from: c.currency, to: baseCurrency })),
+          today,
+        )
+      : new Map<string, string>()
+
+  let ccDebtBase = 0
+  let ccPartial = false
+  for (const c of creditCards) {
+    const balance = Number.parseFloat(c.currentBalance)
+    if (balance >= 0) continue
+    const used = -balance
+    if (c.currency === baseCurrency) {
+      ccDebtBase += used
+      continue
+    }
+    const rate = ccRates.get(`${c.currency}->${baseCurrency}`)
+    if (!rate) {
+      ccPartial = true
+      ccDebtBase += used
+      continue
+    }
+    ccDebtBase += used * Number.parseFloat(rate)
+  }
+
+  const assets = Number.parseFloat(assetsBase)
+  const debts = Number.parseFloat(debtsSummary.totalBalanceInBase)
+  const netWorth = assets - ccDebtBase - debts
+  const netWorthPartial = assetsPartial || ccPartial || debtsSummary.partial
+
+  // ── Proyección ───────────────────────────────────────────────────
+  const startingBalance = assets
   const activeRules = rules.filter((r) => r.active)
   const points = projectCashFlow(rules, startingBalance, 90, { volatility })
 
@@ -44,6 +93,58 @@ export default async function CashFlowPage() {
   const balance90 = points[90]?.balance ?? startingBalance
   const delta90 = balance90 - startingBalance
 
+  // Eventos próximos 30 días, separados por kind.
+  const next30Events = points
+    .slice(1, 31)
+    .flatMap((p) => p.events.map((e) => ({ ...e, date: p.date })))
+  const incomeNext30 = next30Events
+    .filter((e) => e.kind === 'income')
+    .reduce((acc, e) => acc + e.amount, 0)
+  const expenseNext30 = next30Events
+    .filter((e) => e.kind === 'expense')
+    .reduce((acc, e) => acc + e.amount, 0)
+  const netNext30 = incomeNext30 - expenseNext30
+
+  // Runway: cuántos días duraría el saldo actual si dejaran de entrar
+  // ingresos pero los gastos recurrentes siguieran su ritmo. Si la app no
+  // tiene gastos esperados, devuelve null (no aplica).
+  const dailyExpense = expenseNext30 / 30
+  const runwayDays =
+    dailyExpense > 0 ? Math.floor(startingBalance / dailyExpense) : null
+
+  // Breakdown de gastos recurrentes activos por categoría.
+  const expenseRules = activeRules.filter((r) => r.kind === 'expense')
+  const monthlyEquivalent = (r: RuleListItem): number => {
+    const amt = Number.parseFloat(r.amount)
+    switch (r.frequency) {
+      case 'daily':
+        return amt * 30
+      case 'weekly':
+        return amt * (30 / 7)
+      case 'biweekly':
+        return amt * 2
+      case 'monthly':
+        return amt
+      case 'quarterly':
+        return amt / 3
+      case 'yearly':
+        return amt / 12
+    }
+  }
+  const byCategory = new Map<string, { label: string; total: number }>()
+  for (const r of expenseRules) {
+    const key = r.categoryName ?? 'Sin categoría'
+    const entry = byCategory.get(key) ?? { label: key, total: 0 }
+    entry.total += monthlyEquivalent(r)
+    byCategory.set(key, entry)
+  }
+  const categoryTotals = Array.from(byCategory.values()).sort(
+    (a, b) => b.total - a.total,
+  )
+  const maxCategoryTotal = Math.max(1, ...categoryTotals.map((c) => c.total))
+  const sumCategoryTotals = categoryTotals.reduce((acc, c) => acc + c.total, 0)
+
+  // Próximos eventos para la lista de detalle.
   const upcoming = points
     .slice(1, 15)
     .flatMap((p) => p.events.map((e) => ({ ...e, date: p.date })))
@@ -52,33 +153,76 @@ export default async function CashFlowPage() {
 
   return (
     <div className="flex min-w-0 flex-col gap-10 lg:gap-12">
+      {/* Hero — patrimonio neto */}
       <header className="flex min-w-0 flex-col gap-1.5">
-        <p className="text-text-secondary text-sm">Cash flow</p>
+        <p className="text-text-secondary text-sm">Patrimonio neto</p>
         <Amount
-          value={String(balance90.toFixed(2))}
+          value={netWorth.toFixed(2)}
           currency={baseCurrency}
           display
-          kind={balance90 < 0 ? 'negative' : 'neutral'}
-          className="block truncate text-[28px] sm:text-4xl md:text-5xl lg:text-6xl"
+          kind={netWorth < 0 ? 'negative' : 'neutral'}
+          className="block truncate text-[28px] sm:text-4xl md:text-5xl"
         />
         <p className="text-text-tertiary text-xs">
-          Saldo proyectado a 90 días ·{' '}
-          <span className={delta90 >= 0 ? 'text-positive' : 'text-negative'}>
-            {delta90 >= 0 ? '+' : ''}
-            {Math.round(delta90).toLocaleString('es-CO')} {baseCurrency}
-          </span>{' '}
-          desde hoy
+          activos {formatMoney(assets, { currency: baseCurrency, compact: true })}{' '}
+          − tarjetas {formatMoney(ccDebtBase, { currency: baseCurrency, compact: true })}{' '}
+          − deudas {formatMoney(debts, { currency: baseCurrency, compact: true })}
+          {netWorthPartial && ' · conversión parcial'}
         </p>
       </header>
 
       {activeRules.length === 0 ? (
         <EmptyState
           headline="Aún no hay reglas recurrentes activas."
-          body="Configura ingresos y gastos programados desde Ajustes → Reglas recurrentes y Finanzia proyectará el flujo de los próximos 90 días."
+          body="Configura ingresos y gastos programados desde Mi plan · Recurrentes y Finanzia proyectará el flujo de los próximos 90 días."
         />
       ) : (
         <>
-          {/* Mini-stats secundarias por horizonte */}
+          {/* Próximos 30 días — composición del flujo */}
+          <section className="flex flex-col gap-3">
+            <header className="flex items-baseline justify-between">
+              <h2 className="text-text text-sm font-semibold">Próximos 30 días</h2>
+              <span className="text-text-tertiary text-[11px] uppercase tracking-[0.08em]">
+                Esperado del recurrente
+              </span>
+            </header>
+            <div className="border-border-default bg-surface grid grid-cols-2 divide-x divide-[color:var(--border-default)] overflow-hidden rounded-[12px] border sm:grid-cols-4">
+              <KpiCell
+                label="Ingresos"
+                value={incomeNext30}
+                currency={baseCurrency}
+                tone="positive"
+              />
+              <KpiCell
+                label="Gastos"
+                value={expenseNext30}
+                currency={baseCurrency}
+                tone="negative"
+              />
+              <KpiCell
+                label="Neto"
+                value={netNext30}
+                currency={baseCurrency}
+                tone={netNext30 >= 0 ? 'positive' : 'negative'}
+                showSign
+              />
+              <KpiCell
+                label="Runway"
+                value={
+                  runwayDays !== null
+                    ? `${runwayDays}d`
+                    : '∞'
+                }
+                hint={
+                  runwayDays !== null
+                    ? 'sin ingresos'
+                    : 'sin gastos recurrentes'
+                }
+              />
+            </div>
+          </section>
+
+          {/* Mini-stats por horizonte */}
           <section className="border-border-default bg-surface grid grid-cols-3 divide-x divide-[color:var(--border-default)] overflow-hidden rounded-[12px] border">
             <HorizonStat
               label="Hoy"
@@ -102,29 +246,153 @@ export default async function CashFlowPage() {
           {/* Chart */}
           <section className="flex flex-col gap-4">
             <header className="flex items-baseline justify-between">
-              <h2 className="text-text text-sm font-semibold">Proyección</h2>
+              <h2 className="text-text text-sm font-semibold">
+                Proyección a 90 días
+              </h2>
               <span className="text-text-tertiary text-[11px] uppercase tracking-[0.08em]">
-                {activeRules.length} {activeRules.length === 1 ? 'regla activa' : 'reglas activas'}
+                {activeRules.length}{' '}
+                {activeRules.length === 1 ? 'regla activa' : 'reglas activas'}
                 {volatility > 0 ? ' · banda ±1σ' : ''}
               </span>
             </header>
             <div className="border-border-default bg-surface rounded-[12px] border px-5 py-6">
               <CashFlowChart points={points} currency={baseCurrency} />
             </div>
-            {volatility > 0 && (
-              <p className="text-text-tertiary text-[11px] max-w-prose">
-                La banda sombreada refleja la variabilidad histórica de tu gasto
-                discrecional (lo no recurrente). Crece con la raíz cuadrada de
-                los días — más lejos = más incertidumbre.
-              </p>
-            )}
+            <p className="text-text-tertiary text-xs">
+              Saldo proyectado a 90 días{' '}
+              <Amount
+                value={String(balance90.toFixed(2))}
+                currency={baseCurrency}
+                kind={balance90 < 0 ? 'negative' : 'neutral'}
+                className="inline text-xs"
+              />{' '}
+              ·{' '}
+              <span className={delta90 >= 0 ? 'text-positive' : 'text-negative'}>
+                {delta90 >= 0 ? '+' : ''}
+                {Math.round(delta90).toLocaleString('es-CO')} {baseCurrency}
+              </span>{' '}
+              vs hoy
+              {volatility > 0 && (
+                <>
+                  {' · '}
+                  banda ±1σ del gasto discrecional histórico
+                </>
+              )}
+            </p>
           </section>
 
-          {/* Próximos eventos — agrupados por semana si son muchos */}
+          {/* Breakdown de gastos recurrentes por categoría */}
+          {categoryTotals.length > 0 && (
+            <section className="flex flex-col gap-4">
+              <header className="flex items-baseline justify-between">
+                <h2 className="text-text text-sm font-semibold">
+                  Gastos recurrentes por categoría
+                </h2>
+                <span className="text-text-tertiary text-[11px] uppercase tracking-[0.08em]">
+                  Equivalente mensual
+                </span>
+              </header>
+              <div className="border-border-default bg-surface flex flex-col gap-4 rounded-[12px] border p-5">
+                <ul className="flex flex-col gap-3">
+                  {categoryTotals.map((c) => {
+                    const widthPct = Math.max(
+                      2,
+                      (c.total / maxCategoryTotal) * 100,
+                    )
+                    const sharePct =
+                      sumCategoryTotals > 0
+                        ? Math.round((c.total / sumCategoryTotals) * 100)
+                        : 0
+                    return (
+                      <li
+                        key={c.label}
+                        className="flex flex-col gap-1.5"
+                      >
+                        <div className="flex items-baseline justify-between gap-3">
+                          <span className="text-text truncate text-[13px]">
+                            {c.label}
+                          </span>
+                          <span className="text-text-secondary tabular shrink-0 text-[12px]">
+                            {formatMoney(c.total, {
+                              currency: baseCurrency,
+                              compact: true,
+                            })}
+                            <span className="text-text-tertiary ml-2 text-[11px]">
+                              {sharePct}%
+                            </span>
+                          </span>
+                        </div>
+                        <div className="bg-surface-hover h-1 overflow-hidden rounded-full">
+                          <div
+                            aria-hidden
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${widthPct}%`,
+                              background: 'var(--purple-base)',
+                            }}
+                          />
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+                <p className="text-text-tertiary text-[11px]">
+                  Total mensual de recurrentes:{' '}
+                  <span className="text-text-secondary tabular">
+                    {formatMoney(sumCategoryTotals, {
+                      currency: baseCurrency,
+                      compact: true,
+                    })}
+                  </span>
+                </p>
+              </div>
+            </section>
+          )}
+
+          {/* Próximos eventos */}
           {upcoming.length > 0 && (
             <UpcomingEvents events={upcoming} currency={baseCurrency} />
           )}
         </>
+      )}
+    </div>
+  )
+}
+
+function KpiCell({
+  label,
+  value,
+  currency,
+  tone,
+  showSign,
+  hint,
+}: {
+  label: string
+  value: number | string
+  currency?: CurrencyCode
+  tone?: 'positive' | 'negative' | 'neutral'
+  showSign?: boolean
+  hint?: string
+}) {
+  const isNumber = typeof value === 'number'
+  return (
+    <div className="flex flex-col gap-1 p-4">
+      <span className="text-text-tertiary text-[11px] uppercase tracking-[0.08em]">
+        {label}
+      </span>
+      {isNumber && currency ? (
+        <Amount
+          value={String(value.toFixed(2))}
+          currency={currency}
+          kind={tone ?? 'neutral'}
+          showPositiveSign={showSign && value > 0}
+          className="text-base sm:text-lg"
+        />
+      ) : (
+        <span className="text-text amount text-base sm:text-lg">{value}</span>
+      )}
+      {hint && (
+        <span className="text-text-tertiary text-[11px]">{hint}</span>
       )}
     </div>
   )
@@ -137,10 +405,9 @@ type UpcomingEvent = {
   kind: 'income' | 'expense'
 }
 
-/** Lunes ISO de la semana que contiene `dateIso`. */
 function isoWeekStart(dateIso: string): string {
   const d = new Date(`${dateIso}T12:00:00Z`)
-  const day = d.getUTCDay() // 0 dom, 1 lun, …
+  const day = d.getUTCDay()
   const offset = day === 0 ? -6 : 1 - day
   d.setUTCDate(d.getUTCDate() + offset)
   return d.toISOString().slice(0, 10)
@@ -182,11 +449,15 @@ function UpcomingEvents({
             <li
               key={`${e.date}-${i}`}
               className={`flex items-center justify-between gap-4 px-5 py-3 ${
-                i !== events.length - 1 ? 'border-border-default/60 border-b' : ''
+                i !== events.length - 1
+                  ? 'border-border-default/60 border-b'
+                  : ''
               }`}
             >
               <div className="flex min-w-0 flex-col">
-                <span className="text-text truncate text-sm">{e.description}</span>
+                <span className="text-text truncate text-sm">
+                  {e.description}
+                </span>
                 <span className="text-text-tertiary text-[11px]">
                   {new Date(e.date + 'T12:00:00Z').toLocaleDateString('es-CO', {
                     weekday: 'short',
@@ -210,7 +481,6 @@ function UpcomingEvents({
     )
   }
 
-  // Agrupar por week start (lunes ISO).
   const weeks = new Map<string, UpcomingEvent[]>()
   for (const e of events) {
     const key = isoWeekStart(e.date)
@@ -239,7 +509,11 @@ function UpcomingEvents({
           return (
             <div
               key={weekStart}
-              className={wi !== weekEntries.length - 1 ? 'border-border-default/60 border-b' : ''}
+              className={
+                wi !== weekEntries.length - 1
+                  ? 'border-border-default/60 border-b'
+                  : ''
+              }
             >
               <div className="bg-surface-hover/40 flex items-baseline justify-between gap-3 px-5 py-2">
                 <span className="text-text-tertiary text-[11px] uppercase tracking-[0.08em]">
@@ -261,14 +535,19 @@ function UpcomingEvents({
                     className="flex items-center justify-between gap-4 px-5 py-2.5"
                   >
                     <div className="flex min-w-0 flex-col">
-                      <span className="text-text truncate text-sm">{e.description}</span>
+                      <span className="text-text truncate text-sm">
+                        {e.description}
+                      </span>
                       <span className="text-text-tertiary text-[11px]">
-                        {new Date(e.date + 'T12:00:00Z').toLocaleDateString('es-CO', {
-                          weekday: 'short',
-                          day: 'numeric',
-                          month: 'short',
-                          timeZone: 'UTC',
-                        })}
+                        {new Date(e.date + 'T12:00:00Z').toLocaleDateString(
+                          'es-CO',
+                          {
+                            weekday: 'short',
+                            day: 'numeric',
+                            month: 'short',
+                            timeZone: 'UTC',
+                          },
+                        )}
                       </span>
                     </div>
                     <Amount
