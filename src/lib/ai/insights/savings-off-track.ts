@@ -51,7 +51,7 @@ export async function detectSavingsOffTrack(ctx: InsightContext): Promise<Detect
         lastAchieved: last.achievedAmount,
         lastTarget: last.targetAmount,
       },
-      action: { type: 'navigate', params: { href: '/ahorro' }, label: 'Ver mi historial de ahorro' },
+      action: { type: 'navigate', params: { href: '/mi-plan/ahorro' }, label: 'Ver mi historial de ahorro' },
       status: 'unread',
       periodStart: prev.periodEnd,
       periodEnd: last.periodEnd,

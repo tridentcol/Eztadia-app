@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { currencyCodes, currencies } from '@/lib/currency/currencies'
-import { createDebt } from '@/app/(app)/deudas/actions'
+import { createDebt } from '@/app/(app)/mi-dinero/deudas/actions'
 import { useDialogStore } from './dialog-store'
 
 const debtTypes = [

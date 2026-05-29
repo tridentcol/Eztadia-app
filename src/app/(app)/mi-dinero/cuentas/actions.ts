@@ -151,7 +151,7 @@ export async function createAccount(
     }
   }
 
-  revalidatePath('/cuentas')
+  revalidatePath('/mi-dinero/cuentas')
   revalidatePath('/dashboard')
   return { ok: true, data: { id: row.id } }
 }
@@ -201,7 +201,7 @@ export async function updateAccountCardVisual(
     })
     .where(and(eq(accounts.id, accountId), eq(accounts.userId, user.id)))
 
-  revalidatePath('/cuentas')
+  revalidatePath('/mi-dinero/cuentas')
   revalidatePath('/dashboard')
   return { ok: true, data: undefined }
 }
@@ -269,8 +269,8 @@ export async function upsertCreditCardProfile(
       },
     })
 
-  revalidatePath('/cuentas')
-  revalidatePath(`/cuentas/${data.accountId}`)
+  revalidatePath('/mi-dinero/cuentas')
+  revalidatePath(`/mi-dinero/cuentas/${data.accountId}`)
   return { ok: true, data: undefined }
 }
 
@@ -285,7 +285,7 @@ export async function archiveAccount(id: string): Promise<ActionResult> {
     .set({ archived: true, updatedAt: new Date() })
     .where(and(eq(accounts.id, id), eq(accounts.userId, user.id)))
 
-  revalidatePath('/cuentas')
+  revalidatePath('/mi-dinero/cuentas')
   revalidatePath('/dashboard')
   return { ok: true, data: undefined }
 }

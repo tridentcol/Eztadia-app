@@ -225,8 +225,8 @@ export async function createTransaction(
       }
     }
 
-    revalidatePath('/transacciones')
-    revalidatePath('/cuentas')
+    revalidatePath('/mi-dinero/movimientos')
+    revalidatePath('/mi-dinero/cuentas')
     revalidatePath('/dashboard')
     return { ok: true, data: { id: inserted[0]!.id } }
   }
@@ -291,8 +291,8 @@ export async function createTransaction(
     }
   }
 
-  revalidatePath('/transacciones')
-  revalidatePath('/cuentas')
+  revalidatePath('/mi-dinero/movimientos')
+  revalidatePath('/mi-dinero/cuentas')
   revalidatePath('/dashboard')
   return { ok: true, data: { id: row.id } }
 }
@@ -378,9 +378,9 @@ export async function setTransactionCategory(input: {
     })
     .where(eq(transactions.id, transactionId))
 
-  revalidatePath('/transacciones')
+  revalidatePath('/mi-dinero/movimientos')
   revalidatePath('/dashboard')
-  revalidatePath('/presupuestos')
+  revalidatePath('/mi-plan/presupuestos')
   return { ok: true, data: undefined }
 }
 
@@ -393,7 +393,7 @@ export async function bulkRecategorize(): Promise<
 > {
   const user = await requireCurrentUser()
   const result = await recategorizeUnclassified(user.id, { limit: 200 })
-  revalidatePath('/transacciones')
+  revalidatePath('/mi-dinero/movimientos')
   revalidatePath('/dashboard')
   return { ok: true, data: result }
 }

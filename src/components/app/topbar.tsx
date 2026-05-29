@@ -9,28 +9,40 @@ import { useCommandStore } from './command-store'
 import { useDialogStore } from './dialog-store'
 import { AlertsBell } from './alerts-bell'
 
-const titles: Record<string, string> = {
-  '/dashboard': 'Resumen',
-  '/cuentas': 'Cuentas',
-  '/transacciones': 'Transacciones',
-  '/deudas': 'Deudas',
-  '/importar': 'Importar',
-  '/categorias': 'Categorías',
-  '/presupuestos': 'Presupuestos',
-  '/metas': 'Metas',
-  '/ahorro': 'Ahorro',
-  '/insights': 'Insights',
-  '/cash-flow': 'Cash Flow',
-  '/informes': 'Informes',
-  '/ajustes': 'Ajustes',
-}
+type TitleEntry = { match: string; section: string; sub?: string }
+
+// Las rutas dentro de las secciones posesivas componen el título como
+// "Sección · Sub-tab". Orden importa: las más específicas primero.
+const ENTRIES: TitleEntry[] = [
+  { match: '/dashboard', section: 'Hoy' },
+
+  { match: '/mi-dinero/cuentas', section: 'Mi dinero', sub: 'Cuentas' },
+  { match: '/mi-dinero/movimientos', section: 'Mi dinero', sub: 'Movimientos' },
+  { match: '/mi-dinero/deudas', section: 'Mi dinero', sub: 'Deudas' },
+  { match: '/mi-dinero', section: 'Mi dinero' },
+
+  { match: '/mi-plan/presupuestos', section: 'Mi plan', sub: 'Presupuestos' },
+  { match: '/mi-plan/metas', section: 'Mi plan', sub: 'Metas' },
+  { match: '/mi-plan/ahorro', section: 'Mi plan', sub: 'Ahorro' },
+  { match: '/mi-plan/cash-flow', section: 'Mi plan', sub: 'Cash flow' },
+  { match: '/mi-plan/recurrentes', section: 'Mi plan', sub: 'Recurrentes' },
+  { match: '/mi-plan', section: 'Mi plan' },
+
+  { match: '/mi-historia/insights', section: 'Mi historia', sub: 'Insights' },
+  { match: '/mi-historia/informes', section: 'Mi historia', sub: 'Informes' },
+  { match: '/mi-historia', section: 'Mi historia' },
+
+  { match: '/importar', section: 'Importar' },
+  { match: '/categorias', section: 'Categorías' },
+  { match: '/ajustes', section: 'Ajustes' },
+]
 
 function resolveTitle(pathname: string): string {
-  if (titles[pathname]) return titles[pathname]
-  const match = Object.keys(titles).find(
-    (key) => key !== '/' && pathname.startsWith(`${key}/`),
+  const hit = ENTRIES.find(
+    (e) => pathname === e.match || pathname.startsWith(`${e.match}/`),
   )
-  return match ? titles[match]! : 'Finanzia'
+  if (!hit) return 'Finanzia'
+  return hit.sub ? `${hit.section} · ${hit.sub}` : hit.section
 }
 
 /**

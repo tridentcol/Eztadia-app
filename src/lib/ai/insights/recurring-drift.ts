@@ -73,7 +73,7 @@ export async function detectRecurringDrift(ctx: InsightContext): Promise<Detecte
       title: `"${rule.description}" cobró fuera de lo usual`,
       body: `Lo esperabas el día ${expectedDay} pero llegó el día ${actualDay} (${direction} de lo habitual).`,
       data: { signature, ruleId: rule.id, expectedDay, actualDay, delta },
-      action: { type: 'navigate', params: { href: '/ajustes/recurring' }, label: 'Ver recurrentes' },
+      action: { type: 'navigate', params: { href: '/mi-plan/recurrentes' }, label: 'Ver recurrentes' },
       status: 'unread',
       periodStart: monthStr + '-01',
       periodEnd: lastTx.date,

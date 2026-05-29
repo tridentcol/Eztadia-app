@@ -77,7 +77,7 @@ export async function createGoal(
   if (!row) {
     return { ok: false, error: { code: 'insert_failed', message: 'No se pudo crear la meta.' } }
   }
-  revalidatePath('/metas')
+  revalidatePath('/mi-plan/metas')
   revalidatePath('/dashboard')
   return { ok: true, data: { id: row.id } }
 }
@@ -121,7 +121,7 @@ export async function adjustGoalProgress(input: {
       updatedAt: new Date(),
     })
     .where(eq(goals.id, goal.id))
-  revalidatePath('/metas')
+  revalidatePath('/mi-plan/metas')
   revalidatePath('/dashboard')
   return { ok: true, data: undefined }
 }
@@ -135,7 +135,7 @@ export async function archiveGoal(id: string): Promise<ActionResult> {
     .update(goals)
     .set({ status: 'abandoned', updatedAt: new Date() })
     .where(and(eq(goals.id, id), eq(goals.userId, user.id)))
-  revalidatePath('/metas')
+  revalidatePath('/mi-plan/metas')
   revalidatePath('/dashboard')
   return { ok: true, data: undefined }
 }

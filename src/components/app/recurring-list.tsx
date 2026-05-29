@@ -9,7 +9,7 @@ import {
   deleteRecurringRule,
   runRecurringNow,
   toggleRecurringRule,
-} from '@/app/(app)/ajustes/recurring/actions'
+} from '@/app/(app)/mi-plan/recurrentes/actions'
 import type {
   RecurringDriftSnapshot,
   RecurringRuleListItem,

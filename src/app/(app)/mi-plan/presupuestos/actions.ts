@@ -83,7 +83,7 @@ export async function createBudget(
     }
   }
 
-  revalidatePath('/presupuestos')
+  revalidatePath('/mi-plan/presupuestos')
   revalidatePath('/dashboard')
   return { ok: true, data: { id: row.id } }
 }
@@ -97,7 +97,7 @@ export async function archiveBudget(id: string): Promise<ActionResult> {
     .update(budgets)
     .set({ archived: true, updatedAt: new Date() })
     .where(and(eq(budgets.id, id), eq(budgets.userId, user.id)))
-  revalidatePath('/presupuestos')
+  revalidatePath('/mi-plan/presupuestos')
   revalidatePath('/dashboard')
   return { ok: true, data: undefined }
 }

@@ -25,7 +25,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import { createGoal } from '@/app/(app)/metas/actions'
+import { createGoal } from '@/app/(app)/mi-plan/metas/actions'
 import { currencyCodes } from '@/lib/currency/currencies'
 import { useDialogStore } from './dialog-store'
 

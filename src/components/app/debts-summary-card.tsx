@@ -44,7 +44,7 @@ export function DebtsSummaryCard({
       <header className="flex items-baseline justify-between">
         <h2 className="text-text text-sm font-semibold">Tu deuda</h2>
         <Link
-          href="/deudas"
+          href="/mi-dinero/deudas"
           className="text-text-secondary hover:text-text text-[13px] transition-colors"
         >
           Ver detalle
@@ -121,7 +121,7 @@ export function DebtsSummaryCard({
         )}
 
         <Link
-          href="/deudas"
+          href="/mi-dinero/deudas"
           className="text-text-secondary hover:text-text inline-flex items-center gap-1 self-start text-[13px] transition-colors"
         >
           Gestionar deudas

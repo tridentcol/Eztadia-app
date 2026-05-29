@@ -118,7 +118,7 @@ export async function createDebt(
     }
   }
 
-  revalidatePath('/deudas')
+  revalidatePath('/mi-dinero/deudas')
   revalidatePath('/dashboard')
   return { ok: true, data: { id: row.id } }
 }
@@ -159,7 +159,7 @@ export async function updateDebt(
     .set(payload)
     .where(and(eq(debts.id, id), eq(debts.userId, user.id)))
 
-  revalidatePath('/deudas')
+  revalidatePath('/mi-dinero/deudas')
   revalidatePath('/dashboard')
   return { ok: true, data: undefined }
 }
@@ -175,7 +175,7 @@ export async function archiveDebt(id: string): Promise<ActionResult> {
     .set({ archived: true, updatedAt: new Date() })
     .where(and(eq(debts.id, id), eq(debts.userId, user.id)))
 
-  revalidatePath('/deudas')
+  revalidatePath('/mi-dinero/deudas')
   revalidatePath('/dashboard')
   return { ok: true, data: undefined }
 }
@@ -191,7 +191,7 @@ export async function markDebtPaid(id: string): Promise<ActionResult> {
     .set({ status: 'paid', currentBalance: '0', updatedAt: new Date() })
     .where(and(eq(debts.id, id), eq(debts.userId, user.id)))
 
-  revalidatePath('/deudas')
+  revalidatePath('/mi-dinero/deudas')
   revalidatePath('/dashboard')
   return { ok: true, data: undefined }
 }

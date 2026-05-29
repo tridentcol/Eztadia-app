@@ -30,7 +30,7 @@ export function CashFlowTeaser({ points, currency, startingBalance }: Props) {
 
   return (
     <Link
-      href="/cash-flow"
+      href="/mi-plan/cash-flow"
       prefetch
       className="border-border-default bg-surface hover:bg-surface-hover/40 group flex flex-col gap-4 rounded-[12px] border p-5 transition-colors"
     >

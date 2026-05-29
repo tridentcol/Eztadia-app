@@ -7,7 +7,7 @@ import { and, eq, isNull, or } from 'drizzle-orm'
 import { requireCurrentUser } from '@/lib/auth'
 import { db } from '@/lib/db/client'
 import { accounts, budgets, categories } from '@/lib/db/schema'
-import { createTransaction } from '@/app/(app)/transacciones/actions'
+import { createTransaction } from '@/app/(app)/mi-dinero/movimientos/actions'
 
 type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -109,7 +109,7 @@ export async function confirmProposedBudget(input: {
       })
       .where(and(eq(budgets.id, p.existingBudgetId), eq(budgets.userId, user.id)))
       .returning({ id: budgets.id })
-    revalidatePath('/presupuestos')
+    revalidatePath('/mi-plan/presupuestos')
     revalidatePath('/dashboard')
     if (!row) {
       return {
@@ -133,7 +133,7 @@ export async function confirmProposedBudget(input: {
       startDate: startDate.toISOString().slice(0, 10),
     })
     .returning({ id: budgets.id })
-  revalidatePath('/presupuestos')
+  revalidatePath('/mi-plan/presupuestos')
   revalidatePath('/dashboard')
   if (!row) {
     return {

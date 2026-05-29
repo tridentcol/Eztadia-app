@@ -53,7 +53,7 @@ export default async function AjustesPage() {
       accent: true,
     },
     {
-      href: '/ajustes/recurring',
+      href: '/mi-plan/recurrentes',
       label: 'Reglas recurrentes',
       description: 'Suscripciones, salario, arriendo. Finanzia las crea solas.',
       icon: 'repeat',

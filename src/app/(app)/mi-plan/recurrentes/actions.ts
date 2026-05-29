@@ -85,7 +85,7 @@ export async function createRecurringRule(
   if (!row) {
     return { ok: false, error: { code: 'insert_failed', message: 'No se pudo crear.' } }
   }
-  revalidatePath('/ajustes/recurring')
+  revalidatePath('/mi-plan/recurrentes')
   return { ok: true, data: { id: row.id } }
 }
 
@@ -99,7 +99,7 @@ export async function toggleRecurringRule(id: string): Promise<ActionResult> {
     .update(recurringRules)
     .set({ active: !row.active })
     .where(eq(recurringRules.id, id))
-  revalidatePath('/ajustes/recurring')
+  revalidatePath('/mi-plan/recurrentes')
   return { ok: true, data: undefined }
 }
 
@@ -108,7 +108,7 @@ export async function deleteRecurringRule(id: string): Promise<ActionResult> {
   await db
     .delete(recurringRules)
     .where(and(eq(recurringRules.id, id), eq(recurringRules.userId, user.id)))
-  revalidatePath('/ajustes/recurring')
+  revalidatePath('/mi-plan/recurrentes')
   return { ok: true, data: undefined }
 }
 
@@ -122,8 +122,8 @@ export async function runRecurringNow(): Promise<
   const user = await requireCurrentUser()
   const today = new Date().toISOString().slice(0, 10)
   const result = await runRecurringForUser(user.id, today)
-  revalidatePath('/ajustes/recurring')
-  revalidatePath('/transacciones')
-  revalidatePath('/cuentas')
+  revalidatePath('/mi-plan/recurrentes')
+  revalidatePath('/mi-dinero/movimientos')
+  revalidatePath('/mi-dinero/cuentas')
   return { ok: true, data: result }
 }

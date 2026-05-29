@@ -150,7 +150,7 @@ export default async function DashboardPage() {
             <header className="flex items-baseline justify-between">
               <h2 className="text-text text-sm font-semibold">Tus cuentas</h2>
               <Link
-                href="/cuentas"
+                href="/mi-dinero/cuentas"
                 className="text-text-secondary hover:text-text text-[13px] transition-colors"
               >
                 Ver todas
@@ -204,7 +204,7 @@ export default async function DashboardPage() {
               </h2>
               <div className="flex items-center gap-3">
                 <Link
-                  href="/transacciones"
+                  href="/mi-dinero/movimientos"
                   className="text-text-secondary hover:text-text text-[13px] transition-colors"
                 >
                   Ver todos
@@ -257,7 +257,7 @@ export default async function DashboardPage() {
                   Lecturas recientes
                 </h2>
                 <Link
-                  href="/insights"
+                  href="/mi-historia/insights"
                   className="text-text-secondary hover:text-text text-[13px] transition-colors"
                 >
                   Ver todas
@@ -280,7 +280,7 @@ export default async function DashboardPage() {
                   Presupuestos del período
                 </h2>
                 <Link
-                  href="/presupuestos"
+                  href="/mi-plan/presupuestos"
                   className="text-text-secondary hover:text-text text-[13px] transition-colors"
                 >
                   Ver todos

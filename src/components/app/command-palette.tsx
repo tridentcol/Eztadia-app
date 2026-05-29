@@ -13,20 +13,37 @@ type NavItem = {
   label: string
   href: string
   icon: keyof typeof icons
+  // Aliases de búsqueda — incluyen los nombres viejos para que "ir a
+  // transacciones" siga resolviendo a la nueva ruta `/mi-dinero/movimientos`.
+  keywords?: string
   shortcut?: string
 }
 
+// Cmd+K resuelve todas las sub-tabs por nombre directo. Las rutas viejas
+// (transacciones, ahorro, etc.) viven como aliases en `keywords` para
+// preservar el muscle-memory.
 const navigation: NavItem[] = [
-  { label: 'Ir a Resumen', href: '/dashboard', icon: 'home', shortcut: 'G R' },
-  { label: 'Ir a Cuentas', href: '/cuentas', icon: 'wallet', shortcut: 'G C' },
-  { label: 'Ir a Transacciones', href: '/transacciones', icon: 'list', shortcut: 'G T' },
+  { label: 'Ir a Hoy', href: '/dashboard', icon: 'home', shortcut: 'G H', keywords: 'resumen dashboard inicio' },
+
+  // Mi dinero
+  { label: 'Ir a Cuentas', href: '/mi-dinero/cuentas', icon: 'wallet', shortcut: 'G C' },
+  { label: 'Ir a Movimientos', href: '/mi-dinero/movimientos', icon: 'list', shortcut: 'G M', keywords: 'transacciones bitácora' },
+  { label: 'Ir a Deudas', href: '/mi-dinero/deudas', icon: 'landmark', keywords: 'préstamos tarjetas' },
+
+  // Mi plan
+  { label: 'Ir a Presupuestos', href: '/mi-plan/presupuestos', icon: 'target' },
+  { label: 'Ir a Metas', href: '/mi-plan/metas', icon: 'piggy-bank' },
+  { label: 'Ir a Ahorro', href: '/mi-plan/ahorro', icon: 'trending-up' },
+  { label: 'Ir a Cash flow', href: '/mi-plan/cash-flow', icon: 'trending-down', keywords: 'flujo caja' },
+  { label: 'Ir a Recurrentes', href: '/mi-plan/recurrentes', icon: 'repeat', keywords: 'recurring suscripciones recordatorios' },
+
+  // Mi historia
+  { label: 'Ir a Insights', href: '/mi-historia/insights', icon: 'sparkles', keywords: 'lecturas' },
+  { label: 'Ir a Informes', href: '/mi-historia/informes', icon: 'book-open', keywords: 'reportes mensuales' },
+
+  // Globales
   { label: 'Ir a Categorías', href: '/categorias', icon: 'tag' },
-  { label: 'Ir a Presupuestos', href: '/presupuestos', icon: 'target' },
-  { label: 'Ir a Metas', href: '/metas', icon: 'piggy-bank' },
-  { label: 'Ir a Insights', href: '/insights', icon: 'sparkles' },
-  { label: 'Ir a Cash Flow', href: '/cash-flow', icon: 'trending-down' },
-  { label: 'Ir a Informes', href: '/informes', icon: 'book-open' },
-  { label: 'Ir a Importar', href: '/importar', icon: 'upload' },
+  { label: 'Importar CSV', href: '/importar', icon: 'upload', keywords: 'csv extracto bancario' },
   { label: 'Ajustes', href: '/ajustes', icon: 'settings' },
 ]
 
@@ -153,7 +170,7 @@ export function CommandPalette() {
                   value="Resumen del día movimientos hoy diario"
                   onSelect={() => {
                     const today = new Date().toISOString().slice(0, 10)
-                    runNavigate(`/transacciones?day=${today}`)
+                    runNavigate(`/mi-dinero/movimientos?day=${today}`)
                   }}
                   className="text-text-secondary aria-selected:bg-surface-hover aria-selected:text-text mx-2 flex h-9 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors"
                 >
@@ -168,10 +185,16 @@ export function CommandPalette() {
               >
                 {navigation.map((item) => {
                   const Icon = icons[item.icon]
+                  // cmdk filtra contra `value` — concatenamos label + keywords
+                  // para que aliases viejos (transacciones, ahorro, etc.) sigan
+                  // resolviendo.
+                  const value = item.keywords
+                    ? `${item.label} ${item.keywords}`
+                    : item.label
                   return (
                     <Command.Item
                       key={item.href}
-                      value={item.label}
+                      value={value}
                       onSelect={() => runNavigate(item.href)}
                       className="text-text-secondary aria-selected:bg-surface-hover aria-selected:text-text mx-2 flex h-9 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors"
                     >

@@ -25,7 +25,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import { createBudget } from '@/app/(app)/presupuestos/actions'
+import { createBudget } from '@/app/(app)/mi-plan/presupuestos/actions'
 import { useDialogStore } from './dialog-store'
 
 type CategoryOption = {

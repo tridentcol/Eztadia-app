@@ -27,24 +27,19 @@ type Section = {
 
 const SECTIONS: Section[] = [
   {
-    label: 'Operación',
+    label: 'Mi historia',
     items: [
-      { label: 'Deudas', href: '/deudas', icon: 'landmark' },
-      { label: 'Importar', href: '/importar', icon: 'upload' },
-      { label: 'Categorías', href: '/categorias', icon: 'tag' },
-      { label: 'Presupuestos', href: '/presupuestos', icon: 'target' },
-      { label: 'Metas', href: '/metas', icon: 'piggy-bank' },
-      { label: 'Ahorro', href: '/ahorro', icon: 'trending-up' },
-      { label: 'Cash Flow', href: '/cash-flow', icon: 'trending-down' },
-      { label: 'Informes', href: '/informes', icon: 'book-open' },
+      { label: 'Insights', href: '/mi-historia/insights', icon: 'sparkles' },
+      { label: 'Informes', href: '/mi-historia/informes', icon: 'book-open' },
     ],
   },
   {
     label: 'Configuración',
     items: [
       { label: 'Ajustes', href: '/ajustes', icon: 'settings' },
+      { label: 'Categorías', href: '/categorias', icon: 'tag' },
+      { label: 'Importar CSV', href: '/importar', icon: 'upload' },
       { label: 'Integraciones IA', href: '/ajustes/integraciones', icon: 'sparkles' },
-      { label: 'Reglas recurrentes', href: '/ajustes/recurring', icon: 'repeat' },
       { label: 'Alertas', href: '/ajustes/alertas', icon: 'bell' },
     ],
   },
@@ -57,8 +52,8 @@ type Props = {
 
 /**
  * Sheet full-screen mobile que expone secciones no presentes en el bottom-nav
- * (importar, categorías, presupuestos, metas, ajustes y sub-páginas). Se
- * dispara desde el item "Más" del MobileNav.
+ * (Mi historia + ajustes globales). Se dispara desde el item "Más" del
+ * MobileNav.
  */
 export function MobileMoreSheet({ open, onOpenChange }: Props) {
   const pathname = usePathname()

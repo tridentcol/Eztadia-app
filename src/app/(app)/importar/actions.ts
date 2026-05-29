@@ -182,8 +182,8 @@ export async function runImport(input: ImportInput): Promise<ImportResult> {
     .where(eq(importBatches.id, batch.id))
 
   revalidatePath('/importar')
-  revalidatePath('/transacciones')
-  revalidatePath('/cuentas')
+  revalidatePath('/mi-dinero/movimientos')
+  revalidatePath('/mi-dinero/cuentas')
   revalidatePath('/dashboard')
 
   return {

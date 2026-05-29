@@ -29,7 +29,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import { createTransaction } from '@/app/(app)/transacciones/actions'
+import { createTransaction } from '@/app/(app)/mi-dinero/movimientos/actions'
 import { useDialogStore } from './dialog-store'
 
 type AccountOption = {

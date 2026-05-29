@@ -103,8 +103,8 @@ export async function createCategory(
   }
 
   revalidatePath('/categorias')
-  revalidatePath('/transacciones')
-  revalidatePath('/presupuestos')
+  revalidatePath('/mi-dinero/movimientos')
+  revalidatePath('/mi-plan/presupuestos')
   return { ok: true, data: { id: row.id } }
 }
 
@@ -192,8 +192,8 @@ export async function updateCategory(
     .where(and(eq(categories.id, data.id), eq(categories.userId, user.id)))
 
   revalidatePath('/categorias')
-  revalidatePath('/transacciones')
-  revalidatePath('/presupuestos')
+  revalidatePath('/mi-dinero/movimientos')
+  revalidatePath('/mi-plan/presupuestos')
   revalidatePath('/dashboard')
   return { ok: true, data: undefined }
 }

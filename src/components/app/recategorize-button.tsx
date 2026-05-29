@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
-import { bulkRecategorize } from '@/app/(app)/transacciones/actions'
+import { bulkRecategorize } from '@/app/(app)/mi-dinero/movimientos/actions'
 import { icons } from '@/lib/design/icons'
 
 type Props = {

@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { setTransactionCategory } from '@/app/(app)/transacciones/actions'
+import { setTransactionCategory } from '@/app/(app)/mi-dinero/movimientos/actions'
 import { icons } from '@/lib/design/icons'
 import { cn } from '@/lib/utils'
 

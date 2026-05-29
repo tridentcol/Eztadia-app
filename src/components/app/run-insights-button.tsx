@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
-import { runInsightsNow } from '@/app/(app)/insights/actions'
+import { runInsightsNow } from '@/app/(app)/mi-historia/insights/actions'
 import { icons } from '@/lib/design/icons'
 
 /**

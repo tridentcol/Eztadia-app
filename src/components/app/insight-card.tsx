@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils'
 import {
   dismissInsight,
   markInsightActed,
-} from '@/app/(app)/insights/actions'
+} from '@/app/(app)/mi-historia/insights/actions'
 
 type InsightCardData = {
   id: string
@@ -57,9 +57,9 @@ function actionHref(action: ActionPayload): string | null {
     if (action.params?.from) params.set('from', action.params.from)
     if (action.params?.to) params.set('to', action.params.to)
     const qs = params.toString()
-    return qs ? `/transacciones?${qs}` : '/transacciones'
+    return qs ? `/mi-dinero/movimientos?${qs}` : '/mi-dinero/movimientos'
   }
-  if (action.type === 'view-budgets') return '/presupuestos'
+  if (action.type === 'view-budgets') return '/mi-plan/presupuestos'
   return null
 }
 

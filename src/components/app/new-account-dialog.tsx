@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { currencyCodes, currencies } from '@/lib/currency/currencies'
-import { createAccount } from '@/app/(app)/cuentas/actions'
+import { createAccount } from '@/app/(app)/mi-dinero/cuentas/actions'
 import {
   BRAND_LABELS,
   CARD_CATALOG,

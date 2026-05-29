@@ -25,7 +25,7 @@ export async function dismissInsight(id: string): Promise<ActionResult> {
     .update(insights)
     .set({ status: 'dismissed' })
     .where(and(eq(insights.id, id), eq(insights.userId, user.id)))
-  revalidatePath('/insights')
+  revalidatePath('/mi-historia/insights')
   revalidatePath('/dashboard')
   return { ok: true, data: undefined }
 }
@@ -40,7 +40,7 @@ export async function markInsightActed(id: string): Promise<ActionResult> {
     .update(insights)
     .set({ status: 'acted', actedAt: new Date() })
     .where(and(eq(insights.id, id), eq(insights.userId, user.id)))
-  revalidatePath('/insights')
+  revalidatePath('/mi-historia/insights')
   revalidatePath('/dashboard')
   return { ok: true, data: undefined }
 }
@@ -61,7 +61,7 @@ export async function markInsightRead(id: string): Promise<ActionResult> {
         eq(insights.status, 'unread'),
       ),
     )
-  revalidatePath('/insights')
+  revalidatePath('/mi-historia/insights')
   revalidatePath('/dashboard')
   return { ok: true, data: undefined }
 }
@@ -75,7 +75,7 @@ export async function runInsightsNow(): Promise<
 > {
   const user = await requireCurrentUser()
   const result = await runDetectorsForUser(user.id)
-  revalidatePath('/insights')
+  revalidatePath('/mi-historia/insights')
   revalidatePath('/dashboard')
   return { ok: true, data: { generated: result.generated, skipped: result.skipped } }
 }

@@ -25,7 +25,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import { createRecurringRule } from '@/app/(app)/ajustes/recurring/actions'
+import { createRecurringRule } from '@/app/(app)/mi-plan/recurrentes/actions'
 import { useDialogStore } from './dialog-store'
 
 type AccountOption = { id: string; name: string; currency: string }

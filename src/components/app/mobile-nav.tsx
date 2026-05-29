@@ -15,10 +15,9 @@ type NavItem = {
 }
 
 const ITEMS: NavItem[] = [
-  { label: 'Resumen', href: '/dashboard', icon: 'home' },
-  { label: 'Cuentas', href: '/cuentas', icon: 'wallet' },
-  { label: 'Bitácora', href: '/transacciones', icon: 'list' },
-  { label: 'Insights', href: '/insights', icon: 'sparkles' },
+  { label: 'Hoy', href: '/dashboard', icon: 'home' },
+  { label: 'Mi dinero', href: '/mi-dinero', icon: 'wallet' },
+  { label: 'Mi plan', href: '/mi-plan', icon: 'target' },
 ]
 
 function isActive(pathname: string, href: string): boolean {
@@ -27,13 +26,13 @@ function isActive(pathname: string, href: string): boolean {
 }
 
 /**
- * Bottom nav fijo para mobile (<md). 4 items primarios + "Más" abre sheet
- * con resto de secciones (importar, categorías, presupuestos, metas, ajustes
- * y subpáginas). El AppSidebar shadcn se desmonta en mobile.
+ * Bottom nav fijo para mobile (<md). 3 items primarios (Hoy / Mi dinero /
+ * Mi plan) + botón "Más" que abre sheet con Mi historia + Ajustes. El
+ * AppSidebar shadcn se desmonta en mobile.
  *
  * Patrón estándar fintech (Mercury, Revolut, Wise): pulgar alcanza la base,
- * destinos clave siempre visibles, jerarquía obvia. `safe-area-inset-bottom`
- * respeta el home indicator de iOS.
+ * destinos clave siempre visibles. `safe-area-inset-bottom` respeta el home
+ * indicator de iOS.
  */
 export function MobileNav() {
   const pathname = usePathname()
@@ -41,9 +40,9 @@ export function MobileNav() {
   const [moreOpen, setMoreOpen] = useState(false)
   const More = icons['more-horizontal'] ?? icons.settings
 
-  // Warmup eager de las 4 rutas primarias al montar el bottom-nav. Next
-  // limita el viewport-prefetch en conexiones lentas; este loop fuerza la
-  // descarga del RSC (full prefetch) en cuanto la app es interactiva.
+  // Warmup eager de las rutas primarias al montar el bottom-nav. Next limita
+  // el viewport-prefetch en conexiones lentas; este loop fuerza la descarga
+  // del RSC (full prefetch) en cuanto la app es interactiva.
   useEffect(() => {
     for (const item of ITEMS) {
       router.prefetch(item.href)
