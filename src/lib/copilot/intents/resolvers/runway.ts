@@ -64,6 +64,21 @@ export const resolveRunway: IntentResolver = async (_slots, ctx) => {
     })
   }
 
+  // Consejo: si la liquidez no llega al mes, sugerir un recorte concreto.
+  if (days < 30) {
+    const targetDaily = balance / 30
+    const cutPerWeek = Math.max(0, avgDailyExpense - targetDaily) * 7
+    blocks.push({
+      type: 'advice',
+      tone: days < 15 ? 'negative' : 'warning',
+      title: 'Liquidez ajustada',
+      body:
+        cutPerWeek > 0
+          ? `Te alcanza para ~${days} días. Recortando ~${money(cutPerWeek, ctx.baseCurrency)}/semana llegas al mes.`
+          : `Te alcanza para ~${days} días. Atento a los próximos pagos antes de gastar de más.`,
+    })
+  }
+
   return {
     intro: 'Estimación a ritmo de gasto de los últimos 30 días.',
     blocks,

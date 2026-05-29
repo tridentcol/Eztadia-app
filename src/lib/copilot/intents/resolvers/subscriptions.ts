@@ -1,9 +1,12 @@
 import 'server-only'
 
 import { listRecurringForUser } from '@/lib/db/queries/recurring'
-import type { AnswerBlock } from '../../render/answer-ast'
+import { detectRecurring } from '@/lib/ai/insights/recurring-detection'
+import type { AnswerBlock, ProposalAction } from '../../render/answer-ast'
 import type { IntentResolver } from '../types'
 import { money } from '../helpers'
+import { toInsightContext } from '../../advice/metrics'
+import { insightToAdvice } from '../../advice/to-advice'
 
 /** Factor para normalizar una frecuencia a gasto mensual aproximado. */
 const MONTHLY_FACTOR: Record<string, number> = {
@@ -58,5 +61,19 @@ export const resolveSubscriptions: IntentResolver = async (_slots, ctx) => {
     },
   ]
 
-  return { blocks }
+  // Consejo: cargos que se repiten y no están registrados como regla.
+  const actions: ProposalAction[] = []
+  try {
+    const detected = await detectRecurring(toInsightContext(ctx))
+    const top = detected[0]
+    if (top) {
+      const { block, action } = insightToAdvice(top)
+      blocks.push(block)
+      if (action) actions.push(action)
+    }
+  } catch {
+    // El consejo es opcional: si el detector falla, la respuesta igual sirve.
+  }
+
+  return actions.length > 0 ? { blocks, actions } : { blocks }
 }

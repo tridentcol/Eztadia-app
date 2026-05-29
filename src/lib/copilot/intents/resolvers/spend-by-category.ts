@@ -4,6 +4,7 @@ import { listTransactionsForUser } from '@/lib/db/queries/transactions'
 import type { AnswerBlock, BreakdownRow } from '../../render/answer-ast'
 import type { IntentResolver } from '../types'
 import { money, periodOrThisMonth, capitalize } from '../helpers'
+import { categoryDeltaVsBaseline } from '../../advice/metrics'
 
 export const resolveSpendByCategory: IntentResolver = async (slots, ctx) => {
   const period = periodOrThisMonth(slots, ctx)
@@ -49,6 +50,17 @@ export const resolveSpendByCategory: IntentResolver = async (slots, ctx) => {
         })),
       },
     ]
+    // Consejo: solo si gastó notablemente más que su promedio histórico.
+    const delta = await categoryDeltaVsBaseline(ctx, slots.category.id, period)
+    if (delta && delta.deltaPct >= 0.2) {
+      blocks.push({
+        type: 'advice',
+        tone: delta.deltaPct >= 0.5 ? 'warning' : 'neutral',
+        title: `Gasto alto en ${slots.category.name}`,
+        body: `Llevas ${money(delta.current, ctx.baseCurrency)}, ${Math.round(delta.deltaPct * 100)}% más que tu promedio mensual (${money(delta.avg, ctx.baseCurrency)}).`,
+      })
+    }
+
     // Sugerir un presupuesto mensual redondeado al gasto observado.
     const suggested = Math.round(total / 10000) * 10000
     return {

@@ -5,9 +5,15 @@ import { sql } from 'drizzle-orm'
 import { db } from '@/lib/db/client'
 import { OVER_NOTICE, OVER_WARNING } from '@/lib/ai/insights/forecast'
 import type { BudgetProgress } from '@/lib/db/queries/budgets'
+import type { InsightContext } from '@/lib/ai/insights/types'
 import type { EngineContext, PeriodSlot } from '../intents/types'
 
 export { OVER_NOTICE, OVER_WARNING }
+
+/** Adapta el contexto del engine al de los detectores de insights. */
+export function toInsightContext(ctx: EngineContext): InsightContext {
+  return { userId: ctx.userId, baseCurrency: ctx.baseCurrency, today: ctx.todayIso }
+}
 
 /**
  * Métricas dirigidas para tejer consejo en un resolver puntual, con 1 query
