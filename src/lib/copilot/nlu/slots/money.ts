@@ -1,6 +1,19 @@
 import type { MoneySlot } from '../../intents/types'
-import { normalize } from '../normalize'
 import { parseMoneyInput } from '@/lib/currency/format'
+
+/**
+ * Normalización ligera para montos: lowercase + strip de diacríticos, pero
+ * CONSERVA `.` y `,` (separadores de miles/decimales). La normalize global los
+ * elimina y rompería "1.5m" → "1 5m".
+ */
+function normalizeMoney(input: string): string {
+  return input
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
 
 /**
  * Extractor de montos en lenguaje natural ES. Puro. Reconoce:
@@ -22,7 +35,7 @@ const UNITS: Record<string, number> = {
 }
 
 export function extractMoney(input: string): MoneySlot | null {
-  const n = normalize(input)
+  const n = normalizeMoney(input)
 
   // medio millón / un millón y medio
   if (/\bmedio millon\b/.test(n)) return { value: 500_000 }

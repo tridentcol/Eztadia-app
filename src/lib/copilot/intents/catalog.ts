@@ -97,7 +97,7 @@ export const INTENT_CATALOG: IntentMeta[] = [
   {
     id: 'monthly-summary',
     keywords: ['resumen', 'panorama', 'recap', 'como voy este mes', 'como cerro el mes'],
-    patterns: [/\b(resumen (de el|del )?mes|panorama|recap|como (voy|cerro|cierra) (este|el) mes)\b/],
+    patterns: [/\b(resumen|panorama|recap|como (voy|cerro|cierra) (este|el) mes)\b/],
     slotsExpected: ['period'],
   },
   {
