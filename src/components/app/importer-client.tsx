@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
-import { runImport } from './actions'
+import { runImport } from '@/app/(app)/importar/actions'
 import {
   inferColumns,
   importFieldLabels,
@@ -29,7 +29,16 @@ type Account = { id: string; name: string; currency: string }
 
 const NONE = '__none__'
 
-export function ImporterClient({ accounts }: { accounts: Account[] }) {
+export function ImporterClient({
+  accounts,
+  onComplete,
+}: {
+  accounts: Account[]
+  /** Callback que se dispara cuando el import termina con éxito. Si se pasa,
+   *  el caller decide qué hacer (e.g. cerrar dialog). El refresh y el reset
+   *  internos se siguen ejecutando. */
+  onComplete?: () => void
+}) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [file, setFile] = useState<File | null>(null)
@@ -137,6 +146,7 @@ export function ImporterClient({ accounts }: { accounts: Account[] }) {
       }
       router.refresh()
       reset()
+      onComplete?.()
     })
   }
 

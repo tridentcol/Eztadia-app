@@ -34,6 +34,9 @@ const iaRedirects = [
   { source: '/insights/:path*', destination: '/mi-historia/insights/:path*', permanent: true },
   { source: '/informes', destination: '/mi-historia/informes', permanent: true },
   { source: '/informes/:path*', destination: '/mi-historia/informes/:path*', permanent: true },
+  // /importar deja de ser ruta — es CTA dentro de Movimientos. El query
+  // ?import=open hace que ImportDialog se monte abierto al cargar.
+  { source: '/importar', destination: '/mi-dinero/movimientos?import=open', permanent: true },
 ]
 
 const nextConfig: NextConfig = {

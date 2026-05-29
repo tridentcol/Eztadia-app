@@ -69,7 +69,12 @@ export function CardVisual({
             onError={() => setImageBroken(true)}
           />
         ) : (
-          <CardPlaceholder bankName={bank?.name} productName={product?.name} />
+          <CardPlaceholder
+            bankName={bank?.name}
+            productName={product?.name}
+            kind={kind}
+            brandLabel={brandLabel}
+          />
         )}
       </div>
 
@@ -92,21 +97,49 @@ export function CardVisual({
   )
 }
 
+/**
+ * Placeholder editorial cuando no hay imagen del catálogo en disco.
+ * Sin gradiente (mandato Noir regla 3): solo tipografía Inter Display
+ * generosa, jerarquía limpia, chip de kind arriba y brand abajo si hay.
+ */
 function CardPlaceholder({
   bankName,
   productName,
+  kind,
+  brandLabel,
 }: {
   bankName?: string
   productName?: string
+  kind: CardKind
+  brandLabel: string | null
 }) {
+  const kindLabel = kind === 'credit' ? 'Crédito' : 'Débito'
   return (
-    <div className="bg-surface-hover absolute inset-0 flex flex-col justify-end p-5">
-      <span className="text-text text-[15px] font-semibold tracking-tight">
-        {bankName ?? 'Tarjeta'}
-      </span>
-      {productName && (
-        <span className="text-text-tertiary text-[11px]">{productName}</span>
-      )}
+    <div className="bg-surface-hover absolute inset-0 flex flex-col justify-between p-5">
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-text-tertiary text-[10px] uppercase tracking-[0.12em]">
+          {kindLabel}
+        </span>
+      </div>
+      <div className="flex flex-col gap-0.5">
+        <span className="text-text truncate text-[22px] leading-tight font-semibold tracking-[-0.025em] lowercase">
+          {bankName ?? 'tarjeta'}
+        </span>
+        <div className="flex items-baseline justify-between gap-2">
+          {productName ? (
+            <span className="text-text-tertiary truncate text-[11px]">
+              {productName}
+            </span>
+          ) : (
+            <span />
+          )}
+          {brandLabel && (
+            <span className="text-text-tertiary shrink-0 text-[10px] uppercase tracking-[0.12em]">
+              {brandLabel}
+            </span>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

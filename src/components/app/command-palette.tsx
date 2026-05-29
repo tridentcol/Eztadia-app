@@ -27,8 +27,9 @@ const navigation: NavItem[] = [
 
   // Mi dinero
   { label: 'Ir a Cuentas', href: '/mi-dinero/cuentas', icon: 'wallet', shortcut: 'G C' },
+  { label: 'Ir a Tarjetas', href: '/mi-dinero/tarjetas', icon: 'credit-card', keywords: 'tarjetas crédito visa mastercard cupo corte' },
   { label: 'Ir a Movimientos', href: '/mi-dinero/movimientos', icon: 'list', shortcut: 'G M', keywords: 'transacciones bitácora' },
-  { label: 'Ir a Deudas', href: '/mi-dinero/deudas', icon: 'landmark', keywords: 'préstamos tarjetas' },
+  { label: 'Ir a Deudas', href: '/mi-dinero/deudas', icon: 'landmark', keywords: 'préstamos hipoteca' },
 
   // Mi plan
   { label: 'Ir a Presupuestos', href: '/mi-plan/presupuestos', icon: 'target' },
@@ -43,7 +44,7 @@ const navigation: NavItem[] = [
 
   // Globales
   { label: 'Ir a Categorías', href: '/categorias', icon: 'tag' },
-  { label: 'Importar CSV', href: '/importar', icon: 'upload', keywords: 'csv extracto bancario' },
+  { label: 'Importar CSV', href: '/mi-dinero/movimientos?import=open', icon: 'upload', keywords: 'csv extracto bancario importar' },
   { label: 'Ajustes', href: '/ajustes', icon: 'settings' },
 ]
 
@@ -160,7 +161,7 @@ export function CommandPalette() {
                 </Command.Item>
                 <Command.Item
                   value="Importar CSV extracto bancario"
-                  onSelect={() => runNavigate('/importar')}
+                  onSelect={() => runNavigate('/mi-dinero/movimientos?import=open')}
                   className="text-text-secondary aria-selected:bg-surface-hover aria-selected:text-text mx-2 flex h-9 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors"
                 >
                   <Upload strokeWidth={1.5} className="h-[15px] w-[15px]" />

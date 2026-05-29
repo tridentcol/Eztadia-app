@@ -6,23 +6,28 @@ import {
   countUnclassifiedTransactions,
   listAvailableCategories,
   listTransactionsForUser,
+  listUserAccountsBasic,
   type TransactionFilters,
 } from '@/lib/db/queries/transactions'
+import { listImportBatchesForUser } from '@/lib/db/queries/imports'
 import { EmptyState } from '@/components/app/empty-state'
 import { Amount } from '@/components/app/amount'
 import { NewTransactionTrigger } from '@/components/app/new-transaction-trigger'
 import { CategoryCell, type CategoryOption } from '@/components/app/category-cell'
 import { RecategorizeButton } from '@/components/app/recategorize-button'
+import { ImportDialog } from '@/components/app/import-dialog'
+import { DayPickerNav } from '@/components/app/day-picker-nav'
 import { cn } from '@/lib/utils'
 
 export const metadata: Metadata = {
-  title: 'Transacciones',
+  title: 'Movimientos',
 }
 
 type SearchParams = Promise<{
   kind?: string
   accountId?: string
   day?: string
+  import?: string
 }>
 
 const kindFilters: Array<{
@@ -66,7 +71,7 @@ export default async function TransaccionesPage({
 
   const dayFilter = /^\d{4}-\d{2}-\d{2}$/.test(params.day ?? '') ? params.day : undefined
 
-  const [list, available, unclassified] = await Promise.all([
+  const [list, available, unclassified, accounts, batches] = await Promise.all([
     listTransactionsForUser(user.id, {
       kind: dayFilter ? undefined : kind,
       accountId: params.accountId,
@@ -76,6 +81,8 @@ export default async function TransaccionesPage({
     }),
     listAvailableCategories(user.id),
     dayFilter ? Promise.resolve(0) : countUnclassifiedTransactions(user.id),
+    listUserAccountsBasic(user.id),
+    listImportBatchesForUser(user.id, 12),
   ])
   const categoryOptions: CategoryOption[] = available.map((c) => ({
     id: c.id,
@@ -109,10 +116,10 @@ export default async function TransaccionesPage({
           {dayFilter ? (
             <>
               <Link
-                href="/transacciones"
+                href="/mi-dinero/movimientos"
                 className="text-text-tertiary hover:text-text-secondary text-[13px] transition-colors w-fit"
               >
-                ← Bitácora
+                ← Movimientos
               </Link>
               <h1 className="text-text text-2xl font-semibold tracking-[-0.02em] capitalize sm:text-3xl">
                 {dayLabel}
@@ -134,7 +141,7 @@ export default async function TransaccionesPage({
             </>
           ) : (
             <>
-              <p className="text-text-secondary text-sm">Transacciones</p>
+              <p className="text-text-secondary text-sm">Movimientos</p>
               <h1 className="text-text text-2xl font-semibold tracking-[-0.02em] sm:text-3xl">
                 Bitácora
               </h1>
@@ -142,7 +149,14 @@ export default async function TransaccionesPage({
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {!dayFilter && <RecategorizeButton pending={unclassified} />}
+          {!dayFilter && (
+            <>
+              <DayPickerNav initialDay={null} />
+              <ImportDialog accounts={accounts} batches={batches} />
+              <RecategorizeButton pending={unclassified} />
+            </>
+          )}
+          {dayFilter && <DayPickerNav initialDay={dayFilter} />}
           <NewTransactionTrigger />
         </div>
       </header>
@@ -156,7 +170,7 @@ export default async function TransaccionesPage({
           return (
             <Link
               key={f.label}
-              href={`/transacciones${kindParam(f.value)}`}
+              href={`/mi-dinero/movimientos${kindParam(f.value)}`}
               className={cn(
                 'rounded-[6px] px-3 py-1.5 text-[13px] whitespace-nowrap transition-colors',
                 selected

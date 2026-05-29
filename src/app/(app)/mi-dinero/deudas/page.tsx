@@ -68,13 +68,18 @@ export default async function DeudasPage() {
 
   const isEmpty = creditCards.length === 0 && debtsList.length === 0
 
+  // KPI unificado: deuda total = préstamos formales + saldos negativos de tarjetas.
+  // Las tarjetas viven en /mi-dinero/tarjetas, pero la cifra global vive aquí.
+  const totalDebtUnified =
+    Number.parseFloat(summary.totalBalanceInBase) + totalCreditCardDebt
+
   return (
     <div className="flex min-w-0 flex-col gap-10 lg:gap-12">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-1.5">
-          <p className="text-text-secondary text-sm">Deudas</p>
+          <p className="text-text-secondary text-sm">Deuda total</p>
           <Amount
-            value={summary.totalBalanceInBase}
+            value={totalDebtUnified.toFixed(2)}
             currency={baseCurrency}
             display
             kind="neutral"
@@ -94,6 +99,17 @@ export default async function DeudasPage() {
               </>
             )}
             {summary.partial && ' · conversión parcial'}
+          </p>
+          <p className="text-text-tertiary mt-2 max-w-prose text-[12px] leading-relaxed">
+            Préstamos, hipotecas y otras deudas con calendario de pagos. Las
+            tarjetas tienen su propia mecánica — viven en{' '}
+            <Link
+              href="/mi-dinero/tarjetas"
+              className="text-text-secondary hover:text-text underline-offset-2 hover:underline"
+            >
+              Tarjetas
+            </Link>
+            .
           </p>
         </div>
         <NewDebtTrigger />
@@ -142,7 +158,7 @@ export default async function DeudasPage() {
       {isEmpty ? (
         <EmptyState
           headline="Sin deudas registradas — el lugar correcto en el que estar."
-          body="Cuando asumas un préstamo, una hipoteca o cualquier obligación con calendario de pagos, regístrala acá. Las tarjetas de crédito viven como cuentas en /cuentas."
+          body="Cuando asumas un préstamo, una hipoteca o cualquier obligación con calendario de pagos, regístrala acá. Las tarjetas de crédito viven en Tarjetas."
           action={<NewDebtTrigger />}
         />
       ) : (
@@ -156,14 +172,14 @@ export default async function DeudasPage() {
                     Tarjetas de crédito
                   </h2>
                   <p className="text-text-tertiary text-[12px]">
-                    Las tarjetas son cuentas con cupo. Aquí solo el resumen.
+                    Aquí solo el resumen — la mecánica vive en Tarjetas.
                   </p>
                 </div>
                 <Link
-                  href="/cuentas"
+                  href="/mi-dinero/tarjetas"
                   className="text-text-secondary hover:text-text text-[13px] transition-colors"
                 >
-                  Ver todas
+                  Ver tarjetas
                 </Link>
               </header>
               <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">

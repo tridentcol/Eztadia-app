@@ -47,6 +47,7 @@ const TOP_ITEMS: NavItem[] = [
     icon: 'wallet',
     subItems: [
       { label: 'Cuentas', href: '/mi-dinero/cuentas' },
+      { label: 'Tarjetas', href: '/mi-dinero/tarjetas' },
       { label: 'Deudas', href: '/mi-dinero/deudas' },
       { label: 'Movimientos', href: '/mi-dinero/movimientos' },
     ],

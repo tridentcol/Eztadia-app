@@ -1,16 +1,24 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { eq } from 'drizzle-orm'
 
 import { requireCurrentUser } from '@/lib/auth'
-import { listAccountsWithBalance } from '@/lib/db/queries/accounts'
+import { db } from '@/lib/db/client'
+import { profiles } from '@/lib/db/schema'
+import {
+  getTotalBalanceInBase,
+  listAccountsWithBalance,
+} from '@/lib/db/queries/accounts'
+import { getDebtsSummary } from '@/lib/db/queries/debts'
+import { getRatesForPairs } from '@/lib/currency/rates'
 import { EmptyState } from '@/components/app/empty-state'
 import { Amount } from '@/components/app/amount'
 import { NewAccountTrigger } from '@/components/app/new-account-trigger'
 import { CardVisual } from '@/components/cards/card-visual'
 import { EditCardVisualDialog } from '@/components/app/edit-card-visual-dialog'
 import { icons, type IconName } from '@/lib/design/icons'
-import { formatMoney } from '@/lib/currency/format'
 import type { CardKind } from '@/lib/cards/catalog'
+import type { CurrencyCode } from '@/lib/currency/currencies'
 
 export const metadata: Metadata = {
   title: 'Cuentas',
@@ -19,7 +27,6 @@ export const metadata: Metadata = {
 const typeMeta: Record<
   | 'checking'
   | 'savings'
-  | 'credit_card'
   | 'cash'
   | 'investment'
   | 'crypto'
@@ -28,7 +35,6 @@ const typeMeta: Record<
 > = {
   checking: { label: 'Cuenta corriente', icon: 'landmark' },
   savings: { label: 'Ahorros', icon: 'piggy-bank' },
-  credit_card: { label: 'Tarjeta', icon: 'credit-card' },
   cash: { label: 'Efectivo', icon: 'banknote' },
   investment: { label: 'Inversión', icon: 'trending-up' },
   crypto: { label: 'Cripto', icon: 'bitcoin' },
@@ -37,37 +43,94 @@ const typeMeta: Record<
 
 export default async function CuentasPage() {
   const user = await requireCurrentUser()
+  const profile = await db.query.profiles.findFirst({
+    where: eq(profiles.userId, user.id),
+  })
+  const baseCurrency = (profile?.baseCurrency ?? 'COP') as CurrencyCode
+
   const accountsList = await listAccountsWithBalance(user.id)
 
+  // Tarjetas viven en /mi-dinero/tarjetas. Aquí sólo cuentas líquidas y activos.
+  const ownedAccounts = accountsList.filter((a) => a.type !== 'credit_card')
+  const creditCards = accountsList.filter((a) => a.type === 'credit_card')
+
+  // Patrimonio neto = activos − pasivos. Activos = cuentas no-crédito convertidas
+  // a base. Pasivos = saldos negativos de tarjetas + deudas formales.
+  const [{ total: assetsBase, partial: assetsPartial }, debtsSummary] =
+    await Promise.all([
+      getTotalBalanceInBase(user.id, baseCurrency, ownedAccounts),
+      getDebtsSummary(user.id, baseCurrency),
+    ])
+
+  // Deuda en tarjetas en base currency.
+  const today = new Date().toISOString().slice(0, 10)
+  const ccNonBase = creditCards.filter((c) => c.currency !== baseCurrency)
+  const ccRates =
+    ccNonBase.length > 0
+      ? await getRatesForPairs(
+          ccNonBase.map((c) => ({ from: c.currency, to: baseCurrency })),
+          today,
+        )
+      : new Map<string, string>()
+
+  let ccDebtBase = 0
+  let ccPartial = false
+  for (const c of creditCards) {
+    const balance = Number.parseFloat(c.currentBalance)
+    if (balance >= 0) continue
+    const used = -balance
+    if (c.currency === baseCurrency) {
+      ccDebtBase += used
+      continue
+    }
+    const rate = ccRates.get(`${c.currency}->${baseCurrency}`)
+    if (!rate) {
+      ccPartial = true
+      ccDebtBase += used
+      continue
+    }
+    ccDebtBase += used * Number.parseFloat(rate)
+  }
+
+  const netWorth =
+    Number.parseFloat(assetsBase) -
+    ccDebtBase -
+    Number.parseFloat(debtsSummary.totalBalanceInBase)
+  const netWorthPartial = assetsPartial || ccPartial || debtsSummary.partial
+
   return (
-    <div className="flex min-w-0 flex-col gap-10">
+    <div className="flex min-w-0 flex-col gap-10 lg:gap-12">
       <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="flex min-w-0 flex-col gap-1">
-          <p className="text-text-secondary text-sm">Cuentas</p>
-          <h1 className="text-text text-2xl font-semibold tracking-[-0.02em] sm:text-3xl">
-            Todas tus cuentas
-          </h1>
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <p className="text-text-secondary text-sm">Patrimonio neto</p>
+          <Amount
+            value={netWorth.toFixed(2)}
+            currency={baseCurrency}
+            display
+            kind={netWorth < 0 ? 'negative' : 'neutral'}
+            className="block truncate text-[28px] sm:text-4xl md:text-5xl"
+          />
+          <p className="text-text-tertiary text-xs">
+            activos − tarjetas − deudas
+            {netWorthPartial && ' · conversión parcial'}
+          </p>
         </div>
         <NewAccountTrigger />
       </header>
 
-      {accountsList.length === 0 ? (
+      {ownedAccounts.length === 0 ? (
         <EmptyState
           headline="Todavía no hay cuentas registradas."
-          body="Las cuentas son la base de Finanzia: corrientes, tarjetas, ahorros, inversiones. Empieza por una — siempre se pueden agregar más."
+          body="Las cuentas son la base de Finanzia: corrientes, ahorros, efectivo, inversiones. Empieza por una — siempre se pueden agregar más. Las tarjetas viven en su propia pestaña."
           action={<NewAccountTrigger />}
         />
       ) : (
         <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {accountsList.map((a) => {
-            const meta = typeMeta[a.type]
+          {ownedAccounts.map((a) => {
+            const meta = typeMeta[a.type as keyof typeof typeMeta]
             const Icon = icons[a.icon as IconName] ?? icons[meta.icon]
             const cardKind: CardKind | null =
-              a.type === 'credit_card'
-                ? 'credit'
-                : a.type === 'checking' || a.type === 'savings'
-                  ? 'debit'
-                  : null
+              a.type === 'checking' || a.type === 'savings' ? 'debit' : null
             const hasCardVisual = Boolean(a.bankSlug && cardKind)
             return (
               <li key={a.id} className="min-w-0">
@@ -100,7 +163,7 @@ export default async function CuentasPage() {
 
                   <header className="flex items-start justify-between gap-3">
                     <Link
-                      href={`/cuentas/${a.id}`}
+                      href={`/mi-dinero/cuentas/${a.id}`}
                       className="flex min-w-0 items-center gap-3 hover:opacity-80 transition-opacity"
                     >
                       <span
@@ -135,72 +198,6 @@ export default async function CuentasPage() {
                       className="text-2xl"
                     />
                   </div>
-
-                  {a.type === 'credit_card' && a.creditLimit && (() => {
-                    const limit = parseFloat(a.creditLimit)
-                    const balance = parseFloat(a.currentBalance)
-                    // Para tarjetas: si balance es negativo (deuda), el utilizado = abs(balance).
-                    const used = balance < 0 ? -balance : 0
-                    const available = limit - used
-                    const utilization = limit > 0 ? Math.min(1, used / limit) : 0
-                    const tone =
-                      utilization >= 0.9
-                        ? 'bg-negative'
-                        : utilization >= 0.6
-                          ? 'bg-warning'
-                          : 'bg-text'
-                    const todayDay = new Date().getUTCDate()
-                    const daysTo = (target: number | null): number | null => {
-                      if (!target) return null
-                      const diff = target - todayDay
-                      return diff >= 0 ? diff : diff + 30
-                    }
-                    const stD = daysTo(a.statementDay)
-                    const pyD = daysTo(a.paymentDay)
-                    return (
-                      <div className="border-border-default/60 flex flex-col gap-3 border-t pt-3 text-[12px]">
-                        <div className="flex items-baseline justify-between gap-2">
-                          <span className="text-text-tertiary">Utilizado</span>
-                          <span className="text-text-secondary tabular">
-                            {Math.round(utilization * 100)}%
-                          </span>
-                        </div>
-                        <div className="bg-surface-hover h-1 overflow-hidden rounded-full">
-                          <div
-                            aria-hidden
-                            className={`h-full rounded-full transition-all ${tone}`}
-                            style={{ width: `${utilization * 100}%` }}
-                          />
-                        </div>
-                        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
-                          <dt className="text-text-tertiary">Disponible</dt>
-                          <dd className="text-text-secondary truncate text-right tabular">
-                            {formatMoney(available, { currency: a.currency, compact: true })}
-                          </dd>
-                          <dt className="text-text-tertiary">Cupo</dt>
-                          <dd className="text-text-secondary truncate text-right tabular">
-                            {formatMoney(limit, { currency: a.currency, compact: true })}
-                          </dd>
-                          {a.statementDay && (
-                            <>
-                              <dt className="text-text-tertiary">Corte</dt>
-                              <dd className="text-text-secondary truncate text-right tabular">
-                                día {a.statementDay} · en {stD}d
-                              </dd>
-                            </>
-                          )}
-                          {a.paymentDay && (
-                            <>
-                              <dt className="text-text-tertiary">Pago</dt>
-                              <dd className="text-text-secondary truncate text-right tabular">
-                                día {a.paymentDay} · en {pyD}d
-                              </dd>
-                            </>
-                          )}
-                        </dl>
-                      </div>
-                    )
-                  })()}
                 </article>
               </li>
             )
