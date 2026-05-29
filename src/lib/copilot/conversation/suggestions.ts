@@ -11,6 +11,7 @@ const BASE: Suggestion[] = [
   { icon: 'wallet', title: 'Mi saldo', description: 'Cuánto tienes en total', utterance: 'cuál es mi saldo total' },
   { icon: 'trending-down', title: 'En qué gasté', description: 'Desglose del mes', utterance: 'en qué gasté este mes' },
   { icon: 'target', title: 'Presupuestos', description: 'Cómo vas con tus topes', utterance: 'cómo van mis presupuestos' },
+  { icon: 'piggy-bank', title: '¿Dónde puedo ahorrar?', description: 'Consejos según tus datos', utterance: 'dónde puedo ahorrar' },
   { icon: 'calendar', title: 'Qué se viene', description: 'Próximos pagos', utterance: 'qué pagos se vienen' },
 ]
 

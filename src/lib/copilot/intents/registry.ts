@@ -17,6 +17,7 @@ import { resolveInsightsActive } from './resolvers/insights-active'
 import { resolveSearchTransactions } from './resolvers/search-transactions'
 import { resolveMonthlySummary } from './resolvers/monthly-summary'
 import { resolveDormantMoney } from './resolvers/dormant-money'
+import { resolveAdvice } from './resolvers/advice'
 import { resolveHelp } from './resolvers/help'
 
 /** Mapa IntentId → resolver server-side. Única fuente de despacho del engine. */
@@ -37,5 +38,6 @@ export const RESOLVERS: Record<IntentId, IntentResolver> = {
   'search-transactions': resolveSearchTransactions,
   'monthly-summary': resolveMonthlySummary,
   'dormant-money': resolveDormantMoney,
+  advice: resolveAdvice,
   help: resolveHelp,
 }

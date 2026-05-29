@@ -107,6 +107,12 @@ export const INTENT_CATALOG: IntentMeta[] = [
     slotsExpected: [],
   },
   {
+    id: 'advice',
+    keywords: ['que me recomiendas', 'donde puedo ahorrar', 'consejos', 'como mejoro', 'en que ahorro', 'tips', 'recomendacion'],
+    patterns: [/\b(que me recomiendas|donde (puedo )?ahorr|consejo|como (puedo )?mejor|en que (puedo )?ahorr|dame (un )?tip|recomienda)\b/],
+    slotsExpected: [],
+  },
+  {
     id: 'help',
     keywords: ['ayuda', 'que sabes', 'que puedes', 'comandos', 'help', 'que puedo preguntar'],
     patterns: [/\b(ayuda|que (sabes|puedes|puedo preguntar)|comandos|help)\b/],

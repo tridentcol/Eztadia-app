@@ -10,7 +10,7 @@ const STATIC: Partial<Record<IntentId, FollowUpChip[]>> = {
   'show-balance': [
     { label: '¿En qué se está yendo?', utterance: 'en qué gasté este mes' },
     { label: '¿Próximos pagos?', utterance: 'qué pagos se vienen' },
-    { label: '¿Cómo voy con presupuestos?', utterance: 'cómo van mis presupuestos' },
+    { label: '¿Qué me recomendás?', utterance: 'qué me recomiendas' },
   ],
   'spend-by-category': [
     { label: '¿Y el mes pasado?', utterance: 'y el mes pasado' },
@@ -18,6 +18,11 @@ const STATIC: Partial<Record<IntentId, FollowUpChip[]>> = {
     { label: 'Ver movimientos', utterance: 'busca movimientos de este mes' },
   ],
   'budget-status': [
+    { label: '¿En qué gasté?', utterance: 'en qué gasté este mes' },
+    { label: '¿Qué me recomendás?', utterance: 'qué me recomiendas' },
+  ],
+  advice: [
+    { label: 'Mi saldo', utterance: 'cuál es mi saldo total' },
     { label: '¿En qué gasté?', utterance: 'en qué gasté este mes' },
     { label: 'Resumen del mes', utterance: 'resumen del mes' },
   ],
@@ -68,7 +73,7 @@ const STATIC: Partial<Record<IntentId, FollowUpChip[]>> = {
   'monthly-summary': [
     { label: '¿En qué se fue?', utterance: 'en qué gasté este mes' },
     { label: 'Presupuestos', utterance: 'cómo van mis presupuestos' },
-    { label: 'Pagos próximos', utterance: 'qué pagos se vienen' },
+    { label: '¿Qué me recomendás?', utterance: 'qué me recomiendas' },
   ],
   'dormant-money': [
     { label: 'Mi saldo total', utterance: 'cuál es mi saldo total' },

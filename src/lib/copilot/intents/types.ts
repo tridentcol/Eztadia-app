@@ -24,6 +24,7 @@ export type IntentId =
   | 'search-transactions'
   | 'monthly-summary'
   | 'dormant-money'
+  | 'advice'
   | 'help'
 
 export type SlotKey =
