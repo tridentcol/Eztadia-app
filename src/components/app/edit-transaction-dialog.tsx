@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 
@@ -14,13 +14,6 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { updateTransaction } from '@/app/(app)/mi-dinero/movimientos/actions'
 import { CategoryCombobox } from './category-combobox'
@@ -118,12 +111,9 @@ function EditTransactionForm({
     [categories, transaction.kind],
   )
 
-  // Si el kind no admite la categoría actual, la limpiamos.
-  useEffect(() => {
-    if (categoryId && !eligibleCategories.some((c) => c.id === categoryId)) {
-      setCategoryId('')
-    }
-  }, [eligibleCategories, categoryId])
+  // El kind no cambia en edit, así que la categoría preseleccionada
+  // siempre es válida si existía cuando se cargó la tx — no necesitamos
+  // limpiarla con un effect.
 
   const isTransfer = transaction.kind === 'transfer'
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Command } from 'cmdk'
 import { Dialog } from 'radix-ui'
@@ -59,10 +59,17 @@ export function CommandPalette() {
   const openDialog = useDialogStore((s) => s.open)
   const [query, setQuery] = useState('')
 
-  // Reset query cuando se abre/cierra el cmdk.
-  useEffect(() => {
-    if (!open) setQuery('')
-  }, [open])
+  // El query se resetea via onOpenChange (Radix dispatcha cuando el
+  // dialog se cierra por cualquier vía: ESC, click fuera, Cmd+K toggle,
+  // botón programático). Así evitamos un useEffect que React Compiler
+  // marca como side effect indeseado.
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      setOpen(next)
+      if (!next) setQuery('')
+    },
+    [setOpen],
+  )
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -103,7 +110,7 @@ export function CommandPalette() {
   const Calendar = icons.calendar
 
   return (
-    <Dialog.Root open={open} onOpenChange={setOpen}>
+    <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
         <Dialog.Content
