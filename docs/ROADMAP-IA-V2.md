@@ -391,7 +391,7 @@ Crear `<EmptyState>` component variante "rich" con:
 
 ## 6. Plan de migración (por fases ejecutables)
 
-### Fase A — Cimientos de IA (1 sesión)
+### Fase A — Cimientos de IA (1 sesión) ✅ `316d70f`
 
 **Objetivo:** estructura de rutas nueva funcionando con redirects desde las viejas.
 
