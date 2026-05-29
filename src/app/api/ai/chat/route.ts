@@ -9,6 +9,7 @@ import { conversations, messages, profiles } from '@/lib/db/schema'
 import { runCopilotChat } from '@/lib/ai/copilot'
 import { getAnthropic } from '@/lib/ai/anthropic'
 import { routeLocal } from '@/lib/copilot/orchestrator'
+import { retrievalFallback } from '@/lib/copilot/fallback/retrieval'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -119,7 +120,15 @@ export async function POST(req: Request) {
 
   // Responde local cuando es confiado, o cuando no hay LLM (defer sin destino).
   if (routed.mode === 'local' || !provider) {
-    const payload = routed.result.payload
+    // Confiado → respuesta del motor. Defer sin LLM → fallback de recuperación.
+    const payload =
+      routed.mode === 'local'
+        ? routed.result.payload
+        : await retrievalFallback(utterances[utterances.length - 1] ?? '', {
+            userId: user.id,
+            baseCurrency,
+            todayIso,
+          })
     const stream = createUIMessageStream({
       execute({ writer }) {
         const id = `local-${todayIso}-${utterances.length}`
