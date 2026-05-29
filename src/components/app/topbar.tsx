@@ -62,7 +62,7 @@ export function Topbar({ unreadAlerts = 0 }: { unreadAlerts?: number }) {
 
   return (
     <header
-      className="border-border-default bg-background sticky top-0 z-30 flex min-h-14 items-center justify-between gap-3 border-b px-4 pt-[env(safe-area-inset-top)] lg:px-6"
+      className="border-border-default bg-background sticky top-0 z-30 flex min-h-[var(--topbar-h)] items-center justify-between gap-3 border-b px-4 pt-[var(--safe-top)] lg:px-6"
     >
       <div className="flex items-center gap-2">
         <SidebarTrigger className="-ml-1 hidden md:inline-flex" />

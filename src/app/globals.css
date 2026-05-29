@@ -88,6 +88,24 @@
 }
 
 /* ============================================================
+   Tokens de viewport — única fuente de verdad para offsets del shell
+   El topbar mide --topbar-h y la nav inferior --mobile-nav-h. En PWA
+   standalone iOS hay que sumar el safe-area-inset correspondiente. Los
+   tokens *-total combinan altura + safe-area para que sticky offsets,
+   max-heights y paddings no se calculen a mano en 12 sitios distintos.
+   Independientes del tema: no se redefinen en .dark.
+   ============================================================ */
+
+:root {
+  --topbar-h: 56px;
+  --mobile-nav-h: 64px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --topbar-total: calc(var(--topbar-h) + var(--safe-top));
+  --mobile-nav-total: calc(var(--mobile-nav-h) + var(--safe-bottom));
+}
+
+/* ============================================================
    Light theme (default) — Horizonte sobre paper
    Tokens neutrales del brand handoff: paper/ink/graphite/muted/rule.
    Surfaces y border-hover tintados con purple-cream/pale para coherencia

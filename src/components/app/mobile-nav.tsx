@@ -95,13 +95,13 @@ export function MobileNav() {
       <nav
         aria-label="Navegación principal móvil"
         className="border-border-default bg-surface/95 fixed inset-x-0 bottom-0 z-40 border-t backdrop-blur-md md:hidden"
-        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+        style={{ paddingBottom: 'var(--safe-bottom)' }}
       >
         {/* Inner row con altura fija — el safe-area inset queda en el
             <nav> outer como padding extra, no comprime los items. En
             standalone iOS la home indicator vive sobre el inset; el
             contenido se queda en sus 64px sanos. */}
-        <div className="flex h-[64px] items-stretch">
+        <div className="flex h-[var(--mobile-nav-h)] items-stretch">
           {LEFT_ITEMS.map(renderNavItem)}
 
           {/* FAB central — abre new-transaction. Encajado en la barra,
