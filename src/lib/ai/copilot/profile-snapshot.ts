@@ -166,7 +166,9 @@ export async function buildProfileSnapshot(ctx: SnapshotContext): Promise<string
       const next = d.nextPayment
         ? ` Próximo pago: ${d.nextPayment.debtName} el ${d.nextPayment.date}.`
         : ''
-      lines.push(`- Deudas: ${d.activeCount} activa(s), saldo ≈ ${money(d.totalBalanceInBase)}.${next}`)
+      lines.push(
+        `- Deudas: ${d.activeCount} activa(s), saldo ≈ ${money(d.totalBalanceInBase)}${d.partial ? ' (parcial)' : ''}.${next}`,
+      )
     }
   }
 

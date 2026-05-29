@@ -2,7 +2,7 @@ import { tool } from 'ai'
 import { z } from 'zod'
 
 import { formatMoney } from '@/lib/currency/format'
-import type { CurrencyCode } from '@/lib/currency/currencies'
+import { currencies, isSupportedCurrency, type CurrencyCode } from '@/lib/currency/currencies'
 import { normalize } from '@/lib/copilot/nlu/normalize'
 import {
   listAvailableCategories,
@@ -69,7 +69,9 @@ export function queryTransactionsTool(ctx: CopilotContext) {
         .string()
         .max(60)
         .optional()
-        .describe('Nombre exacto de comercio (match normalizado, no difuso).'),
+        .describe(
+          'Comercio a filtrar, tal como aparece en los datos (match exacto, no difuso; para texto difuso usa searchTransactions).',
+        ),
       minAmount: z.number().nonnegative().optional(),
       maxAmount: z.number().nonnegative().optional(),
       order: z.enum(['asc', 'desc']).optional(),
@@ -86,12 +88,19 @@ export function queryTransactionsTool(ctx: CopilotContext) {
         baseCurrency: ctx.baseCurrency,
         todayIso: new Date().toISOString().slice(0, 10),
       }
-      const metric = input.metric ?? 'sum'
       const subject = input.subject ?? 'expense'
+      // El motor solo soporta SUMA con signo para `net`; clamp la métrica para
+      // que lo reportado y el formateo sean coherentes con lo calculado.
+      const metric = subject === 'net' ? 'sum' : (input.metric ?? 'sum')
+      // Redondeo a los decimales de la moneda base (COP=0, USD/EUR=2): preserva
+      // centavos en multi-divisa y no contradice la promesa de cifra exacta.
+      const decimals = isSupportedCurrency(ctx.baseCurrency)
+        ? currencies[ctx.baseCurrency].decimals
+        : 2
+      const roundVal = (v: number) =>
+        metric === 'count' ? Math.round(v) : Number(v.toFixed(decimals))
       const fmt = (v: number) =>
-        metric === 'count'
-          ? String(Math.round(v))
-          : formatMoney(Math.round(v), { currency: baseCurrency })
+        metric === 'count' ? String(Math.round(v)) : formatMoney(v, { currency: baseCurrency })
 
       // --- Resolver filtros por nombre → id (best-effort). ---
       const filters: QueryFilters = {}
@@ -117,7 +126,9 @@ export function queryTransactionsTool(ctx: CopilotContext) {
         } else unresolved.push(`account:${input.account}`)
       }
       if (input.merchant) {
-        filters.merchantSlug = normalize(input.merchant)
+        // El slug canónico (merchants.ts) es LOWER(TRIM(...)) y conserva acentos
+        // y puntuación; normalize() los quitaría y la igualdad SQL nunca matchea.
+        filters.merchantSlug = input.merchant.trim().toLowerCase()
         applied.merchant = input.merchant
       }
       if (input.minAmount !== undefined) {
@@ -175,8 +186,8 @@ export function queryTransactionsTool(ctx: CopilotContext) {
         return {
           ...meta,
           compare: {
-            current: { period: { from: period.from, to: period.to }, value: Math.round(res.a.value), valueFormatted: fmt(res.a.value) },
-            previous: { period: { from: prevFrom, to: prevTo }, value: Math.round(res.b.value), valueFormatted: fmt(res.b.value) },
+            current: { period: { from: period.from, to: period.to }, value: roundVal(res.a.value), valueFormatted: fmt(res.a.value) },
+            previous: { period: { from: prevFrom, to: prevTo }, value: roundVal(res.b.value), valueFormatted: fmt(res.b.value) },
             deltaPct,
           },
         }
@@ -188,21 +199,25 @@ export function queryTransactionsTool(ctx: CopilotContext) {
       if (!input.groupBy) {
         return {
           ...meta,
-          value: Math.round(res.total),
+          value: roundVal(res.total),
           valueFormatted: fmt(res.total),
           matchedTransactions: res.count,
         }
       }
 
       // --- Agrupado. ---
+      // El total agregado solo tiene sentido para sum/count; en avg/max/min el
+      // motor lo deja en 0, así que lo omitimos (un $0 falso engañaría al LLM).
+      const aggregable = metric === 'sum' || metric === 'count'
       return {
         ...meta,
-        total: Math.round(res.total),
-        totalFormatted: metric === 'count' ? String(Math.round(res.total)) : fmt(res.total),
+        ...(aggregable
+          ? { total: roundVal(res.total), totalFormatted: fmt(res.total) }
+          : {}),
         matchedTransactions: res.count,
         rows: res.rows.map((r) => ({
           label: r.label,
-          value: Math.round(r.value),
+          value: roundVal(r.value),
           valueFormatted: fmt(r.value),
           count: r.count,
         })),

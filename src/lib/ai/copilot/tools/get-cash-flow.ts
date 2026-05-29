@@ -1,6 +1,7 @@
 import { tool } from 'ai'
 import { z } from 'zod'
 
+import { currencies, isSupportedCurrency } from '@/lib/currency/currencies'
 import { getNetCashFlowForPeriod } from '@/lib/db/queries/savings'
 import type { CopilotContext } from '../context'
 
@@ -38,6 +39,13 @@ export function getCashFlowTool(ctx: CopilotContext) {
         .describe('Si true, compara contra el período anterior de igual longitud.'),
     }),
     execute: async (input) => {
+      // Redondeo a los decimales de la moneda base (COP=0, USD/EUR=2): preserva
+      // centavos en multi-divisa.
+      const decimals = isSupportedCurrency(ctx.baseCurrency)
+        ? currencies[ctx.baseCurrency].decimals
+        : 2
+      const roundMoney = (v: number) => Number(v.toFixed(decimals))
+
       const current = await getNetCashFlowForPeriod(ctx.userId, input.from, input.to)
       const savingsRatePct =
         current.income > 0 ? Math.round((current.net / current.income) * 100) : null
@@ -54,9 +62,9 @@ export function getCashFlowTool(ctx: CopilotContext) {
       } = {
         baseCurrency: ctx.baseCurrency,
         period: { from: input.from, to: input.to },
-        income: Math.round(current.income),
-        expense: Math.round(current.expense),
-        net: Math.round(current.net),
+        income: roundMoney(current.income),
+        expense: roundMoney(current.expense),
+        net: roundMoney(current.net),
         savingsRatePct,
       }
 
@@ -68,11 +76,11 @@ export function getCashFlowTool(ctx: CopilotContext) {
         result.previous = {
           from: prevFrom,
           to: prevTo,
-          income: Math.round(prev.income),
-          expense: Math.round(prev.expense),
-          net: Math.round(prev.net),
+          income: roundMoney(prev.income),
+          expense: roundMoney(prev.expense),
+          net: roundMoney(prev.net),
         }
-        result.deltaNet = Math.round(current.net - prev.net)
+        result.deltaNet = roundMoney(current.net - prev.net)
       }
 
       return result
