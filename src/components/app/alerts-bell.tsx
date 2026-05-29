@@ -39,7 +39,7 @@ export function AlertsBell({ initialCount }: Props) {
 
   return (
     <Link
-      href="/ajustes/alertas"
+      href="/ajustes#alertas"
       aria-label={`Alertas (${count} sin leer)`}
       className="border-border-default bg-surface hover:bg-surface-hover text-text-secondary hover:text-text relative flex h-9 items-center justify-center rounded-[8px] border px-2 transition-colors"
     >

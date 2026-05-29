@@ -161,7 +161,7 @@ export default async function AhorroPage() {
           action={
             !hasPlan ? (
               <Link
-                href="/ajustes/perfil-financiero"
+                href="/ajustes#perfil"
                 className="text-sm font-medium text-text hover:text-text-secondary underline underline-offset-4 transition-colors"
               >
                 Configurar plan
@@ -307,7 +307,7 @@ export default async function AhorroPage() {
         <header className="flex items-baseline justify-between gap-3">
           <h2 className="text-text text-sm font-semibold">Historial de períodos</h2>
           <Link
-            href="/ajustes/perfil-financiero"
+            href="/ajustes#perfil"
             className="text-text-secondary hover:text-text text-[13px] transition-colors"
           >
             Cambiar plan

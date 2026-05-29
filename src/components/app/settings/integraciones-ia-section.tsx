@@ -1,7 +1,3 @@
-import type { Metadata } from 'next'
-import Link from 'next/link'
-
-import { requireCurrentUser } from '@/lib/auth'
 import {
   AVAILABLE_SCOPES,
   DEFAULT_SCOPES,
@@ -10,10 +6,6 @@ import {
 } from '@/lib/integrations/store'
 import { env } from '@/lib/env'
 import { IntegrationCard } from '@/components/app/integration-card'
-
-export const metadata: Metadata = {
-  title: 'Integraciones',
-}
 
 const PROVIDERS: Array<{
   id: Provider
@@ -37,36 +29,17 @@ const PROVIDERS: Array<{
   },
 ]
 
-export default async function IntegracionesPage() {
-  const user = await requireCurrentUser()
-  const integrations = await listUserIntegrations(user.id)
+type Props = { userId: string }
+
+export async function IntegracionesIASection({ userId }: Props) {
+  const integrations = await listUserIntegrations(userId)
   const byProvider = new Map(integrations.map((i) => [i.provider, i]))
   const operatorGateway = !!env.AI_GATEWAY_API_KEY
   const operatorAnthropic = !!env.ANTHROPIC_API_KEY
   const operatorOpenai = !!env.OPENAI_API_KEY
 
   return (
-    <div className="flex min-w-0 flex-col gap-10">
-      <header className="flex min-w-0 flex-col gap-2">
-        <div className="flex items-center gap-2">
-          <Link
-            href="/ajustes"
-            className="text-text-tertiary hover:text-text-secondary text-[13px] transition-colors"
-          >
-            Ajustes
-          </Link>
-          <span className="text-text-tertiary text-[13px]">/</span>
-          <span className="text-text-secondary text-[13px]">Integraciones</span>
-        </div>
-        <h1 className="text-text text-2xl font-semibold tracking-[-0.02em] sm:text-3xl">
-          Integraciones IA
-        </h1>
-        <p className="text-text-secondary editorial max-w-prose text-base italic">
-          Conecta tus propias claves. Finanzia las cifra con Supabase Vault y
-          las usa sólo desde el servidor — nunca viajan al navegador.
-        </p>
-      </header>
-
+    <div className="flex flex-col gap-6">
       {(operatorGateway || operatorAnthropic || operatorOpenai) && (
         <aside className="border-border-default bg-surface flex flex-col gap-1 rounded-[12px] border p-4">
           <span className="text-text-tertiary text-[11px] uppercase tracking-[0.08em]">
@@ -81,7 +54,7 @@ export default async function IntegracionesPage() {
         </aside>
       )}
 
-      <section className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4">
         {PROVIDERS.map((p) => (
           <IntegrationCard
             key={p.id}
@@ -94,17 +67,17 @@ export default async function IntegracionesPage() {
             integration={byProvider.get(p.id) ?? null}
           />
         ))}
-      </section>
+      </div>
 
-      <section className="border-border-default flex flex-col gap-3 rounded-[12px] border p-5">
-        <h2 className="text-text text-sm font-semibold">Modo sin claves</h2>
-        <p className="text-text-secondary text-sm">
+      <div className="border-border-default flex flex-col gap-3 rounded-[12px] border p-5">
+        <h3 className="text-text text-sm font-semibold">Modo sin claves</h3>
+        <p className="text-text-secondary text-sm leading-relaxed">
           Cuando no hay clave configurada (ni tuya ni del operador), Finanzia
           opera con su motor heurístico interno: categorización por reglas de
           merchant, insights deterministas, copiloto con respuestas pre-cocidas
           a las preguntas más comunes. Todo funciona sin LLM.
         </p>
-      </section>
+      </div>
     </div>
   )
 }

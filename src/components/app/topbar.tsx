@@ -33,7 +33,6 @@ const ENTRIES: TitleEntry[] = [
   { match: '/mi-historia', section: 'Mi historia' },
 
   { match: '/importar', section: 'Importar' },
-  { match: '/categorias', section: 'Categorías' },
   { match: '/ajustes', section: 'Ajustes' },
 ]
 

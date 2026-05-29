@@ -1,173 +1,175 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { eq } from 'drizzle-orm'
 
 import { requireCurrentUser } from '@/lib/auth'
 import { db } from '@/lib/db/client'
 import { profiles } from '@/lib/db/schema'
-import { eq } from 'drizzle-orm'
-import { listUserIntegrations } from '@/lib/integrations/store'
-import { countUnreadAlerts } from '@/lib/db/queries/alerts'
-import { icons } from '@/lib/design/icons'
+import { PerfilSection } from '@/components/app/settings/perfil-section'
+import { CategoriasSection } from '@/components/app/settings/categorias-section'
+import { IntegracionesBancariasSection } from '@/components/app/settings/integraciones-bancarias-section'
+import { IntegracionesIASection } from '@/components/app/settings/integraciones-ia-section'
+import { AlertasSection } from '@/components/app/settings/alertas-section'
+import { SesionSection } from '@/components/app/settings/sesion-section'
 
 export const metadata: Metadata = {
   title: 'Ajustes',
 }
 
-export default async function AjustesPage() {
-  const user = await requireCurrentUser()
-  const [profile, integrations, unreadAlerts] = await Promise.all([
-    db.query.profiles.findFirst({ where: eq(profiles.userId, user.id) }),
-    listUserIntegrations(user.id),
-    countUnreadAlerts(user.id),
-  ])
+type SearchParams = Promise<{ kind?: string }>
 
-  const settings: Array<{
-    href: string
-    label: string
-    description: string
-    icon: keyof typeof icons
-    accent?: boolean
-    badge?: number
-  }> = [
-    {
-      href: '/ajustes/perfil-financiero',
-      label: 'Perfil financiero',
-      description: profile?.onboardedAt
-        ? `Moneda ${profile.baseCurrency} · Plan de ahorro configurado.`
-        : 'Completa tu perfil para activar recomendaciones personalizadas.',
-      icon: 'user',
-      accent: !profile?.onboardedAt,
-    },
-    {
-      href: '/ajustes/integraciones',
-      label: 'Integraciones IA',
-      description:
-        integrations.length === 0
-          ? 'Sin claves configuradas — operando en modo heurístico.'
-          : `${integrations.length} ${
-              integrations.length === 1
-                ? 'integración activa'
-                : 'integraciones activas'
-            }.`,
-      icon: 'sparkles',
-      accent: true,
-    },
-    {
-      href: '/mi-plan/recurrentes',
-      label: 'Reglas recurrentes',
-      description: 'Suscripciones, salario, arriendo. Finanzia las crea solas.',
-      icon: 'repeat',
-    },
-    {
-      href: '/ajustes/integraciones-bancarias',
-      label: 'Alertas bancarias por email',
-      description: 'Recibe movimientos en tiempo real via email. Sin scraping.',
-      icon: 'mail',
-    },
-    {
-      href: '/ajustes/alertas',
-      label: 'Alertas',
-      description:
-        unreadAlerts === 0
-          ? 'Bandeja al día.'
-          : `${unreadAlerts} ${unreadAlerts === 1 ? 'alerta sin leer' : 'alertas sin leer'}.`,
-      icon: 'bell',
-      badge: unreadAlerts,
-    },
-  ]
+type Section = {
+  id: string
+  label: string
+  description: string
+}
+
+const SECTIONS: Section[] = [
+  { id: 'perfil', label: 'Perfil', description: 'Divisa, locale, plan de ahorro' },
+  { id: 'categorias', label: 'Categorías', description: 'Sistema y tuyas' },
+  {
+    id: 'integraciones-bancarias',
+    label: 'Integraciones bancarias',
+    description: 'Reenvío de emails sin scraping',
+  },
+  {
+    id: 'integraciones-ia',
+    label: 'Integraciones IA',
+    description: 'Tus claves Anthropic / OpenAI',
+  },
+  { id: 'alertas', label: 'Alertas', description: 'Bandeja accionable' },
+  { id: 'sesion', label: 'Sesión', description: 'Cuenta y datos básicos' },
+]
+
+export default async function AjustesPage({
+  searchParams,
+}: {
+  searchParams: SearchParams
+}) {
+  const user = await requireCurrentUser()
+  const params = await searchParams
+  const profile = await db.query.profiles.findFirst({
+    where: eq(profiles.userId, user.id),
+  })
 
   return (
-    <div className="flex min-w-0 flex-col gap-10">
-      <header className="flex min-w-0 flex-col gap-1">
+    <div className="flex min-w-0 flex-col gap-10 lg:gap-12">
+      <header className="flex min-w-0 flex-col gap-1.5">
         <p className="text-text-secondary text-sm">Ajustes</p>
         <h1 className="text-text text-2xl font-semibold tracking-[-0.02em] sm:text-3xl">
-          Tu perfil
+          Tu cuenta y preferencias
         </h1>
       </header>
 
-      <section className="border-border-default bg-surface flex flex-col divide-y divide-[color:var(--border-default)] rounded-[12px] border">
-        <Row label="Email" value={user.email} />
-        <Row label="Nombre" value={user.name ?? '—'} />
-        <Row label="Moneda base" value={profile?.baseCurrency ?? '—'} mono />
-        <Row label="Locale" value={profile?.locale ?? '—'} mono />
-        <Row label="Zona horaria" value={profile?.timezone ?? '—'} mono />
-      </section>
+      {/* TOC horizontal scrollable — visible siempre. En lg+ además hay sidebar
+          interno sticky a la izquierda. */}
+      <nav
+        aria-label="Secciones de ajustes"
+        className="border-border-default -mx-1 flex items-center gap-1 self-start overflow-x-auto rounded-[8px] border p-0.5 lg:hidden"
+      >
+        {SECTIONS.map((s) => (
+          <a
+            key={s.id}
+            href={`#${s.id}`}
+            className="text-text-secondary hover:bg-surface-hover/60 hover:text-text rounded-[6px] px-3 py-1.5 text-[13px] whitespace-nowrap transition-colors"
+          >
+            {s.label}
+          </a>
+        ))}
+      </nav>
 
-      <section className="flex flex-col gap-3">
-        <h2 className="text-text text-sm font-semibold">Configuración</h2>
-        <div className="flex flex-col gap-3">
-          {settings.map((s) => {
-            const Icon = icons[s.icon]
-            return (
-              <Link
-                key={s.href}
-                href={s.href}
-                aria-label={`${s.label} — ${s.description}`}
-                className="border-border-default bg-surface hover:bg-surface-hover/60 flex min-h-[64px] min-w-0 items-center justify-between gap-4 rounded-[12px] border p-5 transition-colors"
+      <div className="grid grid-cols-1 gap-10 lg:grid-cols-[200px_1fr] lg:gap-16">
+        {/* Sidebar interno (desktop) */}
+        <aside
+          aria-label="Secciones de ajustes"
+          className="hidden lg:block"
+        >
+          <nav className="sticky top-[72px] flex flex-col gap-1">
+            {SECTIONS.map((s) => (
+              <a
+                key={s.id}
+                href={`#${s.id}`}
+                className="text-text-secondary hover:bg-surface-hover/60 hover:text-text rounded-[6px] px-3 py-2 text-[13px] transition-colors"
               >
-                <div className="flex min-w-0 items-center gap-3">
-                  <Icon
-                    strokeWidth={1.5}
-                    className={`size-4 shrink-0 ${
-                      s.badge && s.badge > 0
-                        ? 'text-text'
-                        : s.accent
-                          ? ''
-                          : 'text-text-tertiary'
-                    }`}
-                    style={s.accent ? { color: 'var(--accent-ai)' } : undefined}
-                  />
-                  <div className="flex min-w-0 flex-col gap-1">
-                    <span className="text-text text-sm font-semibold">{s.label}</span>
-                    <span className="text-text-secondary truncate text-[13px]">
-                      {s.description}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  {s.badge && s.badge > 0 ? (
-                    <span
-                      aria-live="polite"
-                      aria-label={`${s.badge} sin leer`}
-                      className="text-text-tertiary tabular text-[11px]"
-                    >
-                      <span
-                        aria-hidden
-                        className="mr-1.5 inline-block size-1.5 rounded-full align-middle"
-                        style={{ background: 'var(--accent-ai)' }}
-                      />
-                      {s.badge}
-                    </span>
-                  ) : null}
-                  <span className="text-text-tertiary text-sm" aria-hidden>→</span>
-                </div>
-              </Link>
-            )
-          })}
-        </div>
-      </section>
+                {s.label}
+              </a>
+            ))}
+          </nav>
+        </aside>
 
+        {/* Secciones */}
+        <div className="flex min-w-0 flex-col gap-12 lg:gap-16">
+          {SECTIONS.map((s) => (
+            <section
+              key={s.id}
+              id={s.id}
+              aria-label={s.label}
+              className="flex min-w-0 scroll-mt-[80px] flex-col gap-5"
+            >
+              <header className="border-border-default/60 flex flex-col gap-0.5 border-b pb-3">
+                <h2 className="text-text text-base font-semibold">{s.label}</h2>
+                <p className="text-text-tertiary text-[12px]">{s.description}</p>
+              </header>
+              <SectionContent
+                id={s.id}
+                user={user}
+                profile={profile ?? null}
+                searchParams={params}
+              />
+            </section>
+          ))}
+
+          {/* Cross-link a recurrentes que vive fuera de Ajustes ahora. */}
+          <aside className="border-border-default/60 rounded-[8px] border border-dashed p-4 text-[12px]">
+            <span className="text-text-secondary">
+              Las reglas recurrentes (salario, suscripciones, arriendo) viven en{' '}
+              <Link
+                href="/mi-plan/recurrentes"
+                className="text-text underline-offset-2 hover:underline"
+              >
+                Mi plan · Recurrentes
+              </Link>
+              .
+            </span>
+          </aside>
+        </div>
+      </div>
     </div>
   )
 }
 
-function Row({
-  label,
-  value,
-  mono,
+async function SectionContent({
+  id,
+  user,
+  profile,
+  searchParams,
 }: {
-  label: string
-  value: string
-  mono?: boolean
+  id: string
+  user: Awaited<ReturnType<typeof requireCurrentUser>>
+  profile: typeof profiles.$inferSelect | null
+  searchParams: { kind?: string }
 }) {
-  return (
-    <div className="flex items-center justify-between gap-4 px-5 py-4">
-      <span className="text-text-secondary text-sm">{label}</span>
-      <span
-        className={`text-text truncate text-right text-sm${mono ? ' tabular' : ''}`}
-      >
-        {value}
-      </span>
-    </div>
-  )
+  switch (id) {
+    case 'perfil':
+      return <PerfilSection userId={user.id} />
+    case 'categorias':
+      return <CategoriasSection userId={user.id} searchParams={searchParams} />
+    case 'integraciones-bancarias':
+      return <IntegracionesBancariasSection userId={user.id} />
+    case 'integraciones-ia':
+      return <IntegracionesIASection userId={user.id} />
+    case 'alertas':
+      return <AlertasSection userId={user.id} />
+    case 'sesion':
+      return (
+        <SesionSection
+          user={user}
+          baseCurrency={profile?.baseCurrency ?? null}
+          locale={profile?.locale ?? null}
+          timezone={profile?.timezone ?? null}
+        />
+      )
+    default:
+      return null
+  }
 }

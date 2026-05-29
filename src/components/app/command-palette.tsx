@@ -43,9 +43,12 @@ const navigation: NavItem[] = [
   { label: 'Ir a Informes', href: '/mi-historia/informes', icon: 'book-open', keywords: 'reportes mensuales' },
 
   // Globales
-  { label: 'Ir a Categorías', href: '/categorias', icon: 'tag' },
   { label: 'Importar CSV', href: '/mi-dinero/movimientos?import=open', icon: 'upload', keywords: 'csv extracto bancario importar' },
   { label: 'Ajustes', href: '/ajustes', icon: 'settings' },
+  { label: 'Categorías', href: '/ajustes#categorias', icon: 'tag', keywords: 'categorias categorías sistema custom' },
+  { label: 'Alertas', href: '/ajustes#alertas', icon: 'bell', keywords: 'notificaciones bandeja' },
+  { label: 'Integraciones IA', href: '/ajustes#integraciones-ia', icon: 'sparkles', keywords: 'anthropic openai claves' },
+  { label: 'Perfil financiero', href: '/ajustes#perfil', icon: 'user', keywords: 'moneda locale plan ahorro' },
 ]
 
 export function CommandPalette() {

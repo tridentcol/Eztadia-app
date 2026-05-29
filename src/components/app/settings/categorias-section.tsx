@@ -1,8 +1,6 @@
-import type { Metadata } from 'next'
 import Link from 'next/link'
 import { and, asc, eq, isNull, or } from 'drizzle-orm'
 
-import { requireCurrentUser } from '@/lib/auth'
 import { db } from '@/lib/db/client'
 import { categories } from '@/lib/db/schema'
 import { NewCategoryTrigger } from '@/components/app/new-category-trigger'
@@ -10,11 +8,10 @@ import { CategoryActionsMenu } from '@/components/app/category-actions-menu'
 import { icons, type IconName } from '@/lib/design/icons'
 import { cn } from '@/lib/utils'
 
-export const metadata: Metadata = {
-  title: 'Categorías',
+type Props = {
+  userId: string
+  searchParams: { kind?: string }
 }
-
-type SearchParams = Promise<{ kind?: string }>
 
 const kindFilters: Array<{ value: 'expense' | 'income' | 'transfer' | null; label: string }> = [
   { value: null, label: 'Todas' },
@@ -24,7 +21,7 @@ const kindFilters: Array<{ value: 'expense' | 'income' | 'transfer' | null; labe
 ]
 
 function kindParam(value: 'expense' | 'income' | 'transfer' | null): string {
-  return value ? `?kind=${value}` : ''
+  return value ? `?kind=${value}#categorias` : '#categorias'
 }
 
 function labelForKind(kind: 'income' | 'expense' | 'transfer'): string {
@@ -33,17 +30,12 @@ function labelForKind(kind: 'income' | 'expense' | 'transfer'): string {
   return 'Transferencia'
 }
 
-export default async function CategoriasPage({
-  searchParams,
-}: {
-  searchParams: SearchParams
-}) {
-  const user = await requireCurrentUser()
-  const params = await searchParams
-
+export async function CategoriasSection({ userId, searchParams }: Props) {
   const kindFilter =
-    params.kind === 'income' || params.kind === 'expense' || params.kind === 'transfer'
-      ? params.kind
+    searchParams.kind === 'income' ||
+    searchParams.kind === 'expense' ||
+    searchParams.kind === 'transfer'
+      ? searchParams.kind
       : null
 
   const rows = await db
@@ -60,7 +52,7 @@ export default async function CategoriasPage({
     .from(categories)
     .where(
       and(
-        or(isNull(categories.userId), eq(categories.userId, user.id)),
+        or(isNull(categories.userId), eq(categories.userId, userId)),
         eq(categories.archived, false),
         kindFilter ? eq(categories.kind, kindFilter) : undefined,
       ),
@@ -76,7 +68,6 @@ export default async function CategoriasPage({
     childrenByParent.set(c.parentId, list)
   }
 
-  // Categorías padre del usuario primero, luego sistema. Dentro de cada grupo: por kind y nombre.
   const sortedParents = [...parents].sort((a, b) => {
     const aOwn = a.userId !== null ? 0 : 1
     const bOwn = b.userId !== null ? 0 : 1
@@ -89,32 +80,27 @@ export default async function CategoriasPage({
   const totalUserChildren = rows.filter((r) => r.userId !== null && r.parentId !== null).length
 
   return (
-    <div className="flex min-w-0 flex-col gap-10">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="flex min-w-0 flex-col gap-1">
-          <p className="text-text-secondary text-sm">Categorías</p>
-          <h1 className="text-text text-2xl font-semibold tracking-[-0.02em] sm:text-3xl">
-            Sistema y propias
-          </h1>
-          <p className="text-text-tertiary mt-1 text-xs">
-            {userCount + totalUserChildren > 0
-              ? `${userCount + totalUserChildren} tuyas · ${parents.length - userCount} del sistema`
-              : `${parents.length} categorías del sistema`}
-          </p>
-        </div>
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-text-tertiary text-xs">
+          {userCount + totalUserChildren > 0
+            ? `${userCount + totalUserChildren} tuyas · ${parents.length - userCount} del sistema`
+            : `${parents.length} categorías del sistema`}
+        </p>
         <NewCategoryTrigger />
-      </header>
+      </div>
 
       <nav
-        aria-label="Filtros"
-        className="border-border-default -mx-1 flex items-center gap-1 overflow-x-auto rounded-[8px] border p-0.5 self-start"
+        aria-label="Filtros de categorías"
+        className="border-border-default -mx-1 flex items-center gap-1 self-start overflow-x-auto rounded-[8px] border p-0.5"
       >
         {kindFilters.map((f) => {
           const selected = (f.value ?? null) === (kindFilter ?? null)
           return (
             <Link
               key={f.label}
-              href={`/categorias${kindParam(f.value)}`}
+              href={`/ajustes${kindParam(f.value)}`}
+              scroll={false}
               className={cn(
                 'rounded-[6px] px-3 py-1.5 text-[13px] whitespace-nowrap transition-colors',
                 selected

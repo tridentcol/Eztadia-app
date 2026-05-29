@@ -37,6 +37,13 @@ const iaRedirects = [
   // /importar deja de ser ruta — es CTA dentro de Movimientos. El query
   // ?import=open hace que ImportDialog se monte abierto al cargar.
   { source: '/importar', destination: '/mi-dinero/movimientos?import=open', permanent: true },
+  // Ajustes consolidados (Fase E): las 5 sub-rutas se convirtieron en
+  // anchors dentro de /ajustes. /categorias también se mueve aquí.
+  { source: '/ajustes/perfil-financiero', destination: '/ajustes#perfil', permanent: true },
+  { source: '/ajustes/integraciones-bancarias', destination: '/ajustes#integraciones-bancarias', permanent: true },
+  { source: '/ajustes/integraciones', destination: '/ajustes#integraciones-ia', permanent: true },
+  { source: '/ajustes/alertas', destination: '/ajustes#alertas', permanent: true },
+  { source: '/categorias', destination: '/ajustes#categorias', permanent: true },
 ]
 
 const nextConfig: NextConfig = {

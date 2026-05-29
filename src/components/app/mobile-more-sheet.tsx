@@ -37,10 +37,10 @@ const SECTIONS: Section[] = [
     label: 'Configuración',
     items: [
       { label: 'Ajustes', href: '/ajustes', icon: 'settings' },
-      { label: 'Categorías', href: '/categorias', icon: 'tag' },
+      { label: 'Categorías', href: '/ajustes#categorias', icon: 'tag' },
       { label: 'Importar CSV', href: '/mi-dinero/movimientos?import=open', icon: 'upload' },
-      { label: 'Integraciones IA', href: '/ajustes/integraciones', icon: 'sparkles' },
-      { label: 'Alertas', href: '/ajustes/alertas', icon: 'bell' },
+      { label: 'Integraciones IA', href: '/ajustes#integraciones-ia', icon: 'sparkles' },
+      { label: 'Alertas', href: '/ajustes#alertas', icon: 'bell' },
     ],
   },
 ]
