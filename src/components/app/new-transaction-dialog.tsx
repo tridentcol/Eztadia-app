@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/button'
 import { createTransaction } from '@/app/(app)/mi-dinero/movimientos/actions'
 import { icons } from '@/lib/design/icons'
 import { cn } from '@/lib/utils'
+import { CategoryCombobox } from './category-combobox'
 import { useDialogStore } from './dialog-store'
 
 type AccountOption = {
@@ -359,29 +360,21 @@ function NewTransactionForm({
               <label className="text-text-tertiary text-[11px] uppercase tracking-[0.08em]">
                 Categoría
               </label>
-              <Select
-                value={effectiveCategoryId || 'NONE'}
-                onValueChange={(v) => setCategoryId(v === 'NONE' ? '' : v)}
+              <CategoryCombobox
+                options={eligibleCategories.map((c) => ({
+                  id: c.id,
+                  name: c.name,
+                }))}
+                value={effectiveCategoryId}
+                onChange={setCategoryId}
                 disabled={eligibleCategories.length === 0}
-              >
-                <SelectTrigger>
-                  <SelectValue
-                    placeholder={
-                      eligibleCategories.length === 0
-                        ? 'Sin categorías'
-                        : 'Sin categorizar'
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="NONE">Sin categorizar</SelectItem>
-                  {eligibleCategories.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                placeholder={
+                  eligibleCategories.length === 0
+                    ? 'Sin categorías'
+                    : 'Sin categorizar'
+                }
+                emptyLabel="Sin categorizar"
+              />
             </div>
           )}
         </div>
