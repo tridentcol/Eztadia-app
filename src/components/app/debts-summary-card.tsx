@@ -1,7 +1,7 @@
 import Link from 'next/link'
 
 import { Amount } from '@/components/app/amount'
-import { icons } from '@/lib/design/icons'
+import { formatMoney } from '@/lib/currency/format'
 import type { CurrencyCode } from '@/lib/currency/currencies'
 import type { DebtsSummary } from '@/lib/db/queries/debts'
 
@@ -25,6 +25,12 @@ function daysUntilLabel(dateIso: string): string {
   return `en ${diff} días`
 }
 
+/**
+ * Widget de deuda para el dashboard. Patrón visual idéntico al resto:
+ * header con título + link "Ver detalle", contenido en card `bg-surface`
+ * con `border`. Sin fondos tintados, sin iconos en cajita, sin links
+ * duplicados — armonía Noir con el resto de widgets de Hoy.
+ */
 export function DebtsSummaryCard({
   summary,
   creditCardDebtInBase,
@@ -33,11 +39,7 @@ export function DebtsSummaryCard({
   const debtsTotal = Number.parseFloat(summary.totalBalanceInBase)
   const grandTotal = debtsTotal + creditCardDebtInBase
 
-  // No mostrar el widget si no hay nada que reportar.
   if (grandTotal <= 0 && summary.activeCount === 0) return null
-
-  const Landmark = icons.landmark
-  const ChevronRight = icons['chevron-right']
 
   return (
     <section className="flex flex-col gap-4">
@@ -51,52 +53,40 @@ export function DebtsSummaryCard({
         </Link>
       </header>
 
-      <article
-        className="border-border-default flex flex-col gap-5 rounded-[12px] border p-5"
-        style={{
-          background:
-            'color-mix(in oklab, var(--brand-purple-strong) 6%, transparent)',
-        }}
-      >
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-3">
-            <span
-              className="flex h-9 w-9 items-center justify-center rounded-md"
-              style={{
-                background:
-                  'color-mix(in oklab, var(--brand-purple-strong) 18%, transparent)',
-                color: 'var(--brand-purple-soft)',
-              }}
-            >
-              <Landmark strokeWidth={1.5} className="h-4 w-4" />
+      <article className="border-border-default bg-surface flex flex-col rounded-[12px] border">
+        {/* Total */}
+        <div className="flex items-end justify-between gap-4 px-5 py-4">
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <span className="text-text-tertiary text-[11px] uppercase tracking-[0.08em]">
+              Saldo total adeudado
             </span>
-            <div className="flex min-w-0 flex-col">
-              <span className="text-text-tertiary text-[11px] uppercase tracking-[0.08em]">
-                Saldo total adeudado
+            <Amount
+              value={grandTotal.toFixed(2)}
+              currency={currency}
+              kind="neutral"
+              className="text-xl"
+            />
+          </div>
+          <div className="flex shrink-0 flex-col items-end gap-0.5 text-[11px]">
+            {creditCardDebtInBase > 0 && (
+              <span className="text-text-tertiary tabular">
+                {formatMoney(creditCardDebtInBase, { currency, compact: true })} en tarjetas
               </span>
-              <Amount
-                value={grandTotal.toFixed(2)}
-                currency={currency}
-                kind="neutral"
-                className="text-2xl sm:text-3xl"
-              />
-              <span className="text-text-tertiary text-[11px]">
-                {summary.activeCount > 0 && (
-                  <>
-                    {summary.activeCount}{' '}
-                    {summary.activeCount === 1 ? 'préstamo' : 'préstamos'}
-                  </>
-                )}
-                {summary.activeCount > 0 && creditCardDebtInBase > 0 && ' · '}
-                {creditCardDebtInBase > 0 && 'incluye tarjetas'}
-                {summary.partial && ' · conversión parcial'}
+            )}
+            {summary.activeCount > 0 && (
+              <span className="text-text-tertiary tabular">
+                {formatMoney(debtsTotal, { currency, compact: true })} en{' '}
+                {summary.activeCount} {summary.activeCount === 1 ? 'préstamo' : 'préstamos'}
               </span>
-            </div>
+            )}
+            {summary.partial && (
+              <span className="text-text-tertiary">conversión parcial</span>
+            )}
           </div>
         </div>
 
         {summary.nextPayment && (
-          <div className="border-border-default/60 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+          <div className="border-border-default/60 flex items-end justify-between gap-4 border-t px-5 py-4">
             <div className="flex min-w-0 flex-col gap-0.5">
               <span className="text-text-tertiary text-[11px] uppercase tracking-[0.08em]">
                 Próximo pago
@@ -104,9 +94,8 @@ export function DebtsSummaryCard({
               <span className="text-text truncate text-sm">
                 {summary.nextPayment.debtName}
               </span>
-              <span className="text-text-secondary text-[12px]">
-                {summary.nextPayment.date} ·{' '}
-                {daysUntilLabel(summary.nextPayment.date)}
+              <span className="text-text-tertiary text-[11px]">
+                {summary.nextPayment.date} · {daysUntilLabel(summary.nextPayment.date)}
               </span>
             </div>
             {summary.nextPayment.amount && (
@@ -114,19 +103,11 @@ export function DebtsSummaryCard({
                 value={summary.nextPayment.amount}
                 currency={summary.nextPayment.currency as CurrencyCode}
                 kind="neutral"
-                className="text-base"
+                className="shrink-0 text-sm"
               />
             )}
           </div>
         )}
-
-        <Link
-          href="/mi-dinero/deudas"
-          className="text-text-secondary hover:text-text inline-flex items-center gap-1 self-start text-[13px] transition-colors"
-        >
-          Gestionar deudas
-          <ChevronRight strokeWidth={1.5} className="size-3.5" />
-        </Link>
       </article>
     </section>
   )

@@ -59,7 +59,8 @@ export default async function DashboardPage() {
   ])
 
   // Una sola query para todas las tasas que el dashboard necesita: saldo
-  // total + deuda de tarjetas comparten el mismo set de pares non-base→base.
+  // de cuentas + deuda de tarjetas comparten el mismo set de pares
+  // non-base→base.
   const today = new Date().toISOString().slice(0, 10)
   const ratePairs = accountsList
     .filter((a) => a.currency !== baseCurrency)
@@ -69,9 +70,14 @@ export default async function DashboardPage() {
       ? await getRatesForPairs(ratePairs, today)
       : new Map<string, string>()
 
+  // Cuentas (líquidas + activos) — excluye tarjetas de crédito porque esas
+  // son deuda, no saldo a favor. El hero refleja "cuánto tienes hoy", no
+  // patrimonio neto (eso vive en /mi-dinero/cuentas).
+  const ownedAccounts = accountsList.filter((a) => a.type !== 'credit_card')
+
   let totalNum = 0
   let totalPartial = false
-  for (const acc of accountsList) {
+  for (const acc of ownedAccounts) {
     const bal = Number.parseFloat(acc.currentBalance)
     if (acc.currency === baseCurrency) {
       totalNum += bal
@@ -138,7 +144,7 @@ export default async function DashboardPage() {
         <p className="text-text-tertiary text-[11px] uppercase tracking-[0.12em]">
           {greeting}
         </p>
-        <p className="text-text-secondary text-sm">Saldo total</p>
+        <p className="text-text-secondary text-sm">Saldo en cuentas</p>
         <Amount
           value={totalBase}
           currency={baseCurrency}
@@ -147,8 +153,8 @@ export default async function DashboardPage() {
           className="block truncate text-[28px] sm:text-4xl md:text-5xl lg:text-6xl"
         />
         <p className="text-text-tertiary text-xs">
-          Suma de {accountsList.length}{' '}
-          {accountsList.length === 1 ? 'cuenta' : 'cuentas'} · expresado en{' '}
+          Suma de {ownedAccounts.length}{' '}
+          {ownedAccounts.length === 1 ? 'cuenta' : 'cuentas'} · expresado en{' '}
           {baseCurrency}
           {totalSnapshot.partial && ' · conversión parcial'}
         </p>
@@ -173,7 +179,7 @@ export default async function DashboardPage() {
               </Link>
             </header>
             <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {accountsList.slice(0, 6).map((a) => (
+              {ownedAccounts.slice(0, 6).map((a) => (
                 <li
                   key={a.id}
                   className="border-border-default bg-surface flex flex-col gap-1 rounded-[12px] border p-4"
