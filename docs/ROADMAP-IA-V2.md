@@ -427,7 +427,7 @@ Crear `<EmptyState>` component variante "rich" con:
 - `/importar` redirige a `/mi-dinero/movimientos?import=open` y abre el dialog
 - Placeholder de tarjeta sin AVIF se ve premium (no genérico)
 
-### Fase C — Mi plan: refinamiento (1 sesión)
+### Fase C — Mi plan: refinamiento (1 sesión) ✅ `8c4da24`
 
 1. Mover `/ajustes/recurring` → `/mi-plan/recurrentes`
 2. Tab internos en `/mi-plan/layout.tsx`
