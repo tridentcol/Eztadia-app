@@ -161,4 +161,15 @@ CREATE POLICY debts_isolation ON debts
   USING (user_id = (SELECT id FROM users WHERE clerk_id = auth.jwt() ->> 'sub'))
   WITH CHECK (user_id = (SELECT id FROM users WHERE clerk_id = auth.jwt() ->> 'sub'));
 
+-- ----- intent_examples (catálogo global del copiloto: lectura abierta) -----
+-- No lleva user_id; es un catálogo de sistema. Lectura para todos; la escritura
+-- (seed) ocurre vía service_role/conexión directa, que salta RLS por diseño.
+ALTER TABLE intent_examples ENABLE ROW LEVEL SECURITY;
+ALTER TABLE intent_examples FORCE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS intent_examples_read ON intent_examples;
+CREATE POLICY intent_examples_read ON intent_examples
+  FOR SELECT
+  USING (true);
+
 -- exchange_rates queda sin RLS (cache global compartido).

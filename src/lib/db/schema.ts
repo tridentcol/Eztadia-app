@@ -256,6 +256,30 @@ export const categories = pgTable(
 )
 
 // ============================================================
+// intent_examples — catálogo global (sin user_id) para NLU semántico del
+// copiloto. Cada fila es una frase de ejemplo etiquetada con su intent, con su
+// embedding precomputado; el classifier hace kNN coseno contra esta tabla.
+// ============================================================
+
+export const intentExamples = pgTable(
+  'intent_examples',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    intent: text('intent').notNull(),
+    text: text('text').notNull(),
+    embedding: vector('embedding', { dimensions: 1536 }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex('idx_intent_examples_text').on(t.text),
+    index('idx_intent_examples_embedding').using('hnsw', t.embedding.op('vector_cosine_ops')),
+  ],
+)
+
+export type IntentExample = typeof intentExamples.$inferSelect
+export type NewIntentExample = typeof intentExamples.$inferInsert
+
+// ============================================================
 // import_batches  (declared before transactions for FK ordering)
 // ============================================================
 
