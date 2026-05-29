@@ -10,6 +10,7 @@ import { runCopilotChat } from '@/lib/ai/copilot'
 import { getAnthropic } from '@/lib/ai/anthropic'
 import { routeLocal } from '@/lib/copilot/orchestrator'
 import { retrievalFallback } from '@/lib/copilot/fallback/retrieval'
+import type { ConversationContext } from '@/lib/copilot/conversation/reducer'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -23,6 +24,8 @@ const bodySchema = z
   .object({
     id: z.string().min(1).optional(),
     messages: z.array(z.unknown()).min(1, 'Necesito al menos un mensaje.'),
+    // Contexto conversacional efímero que el cliente reenvía cada turno.
+    context: z.unknown().optional(),
   })
   .passthrough()
 
@@ -102,11 +105,14 @@ export async function POST(req: Request) {
     .map((m) => textOf(m))
     .filter((t) => t.length > 0)
 
-  const routed = await routeLocal(utterances, {
-    userId: user.id,
-    baseCurrency,
-    todayIso,
-  })
+  // El cliente lleva el contexto conversacional y lo reenvía; lo usamos para
+  // continuidad real (referencias, slots heredados) en vez de reconstruir.
+  const clientContext = parsedBody.context as ConversationContext | undefined
+  const routed = await routeLocal(
+    utterances,
+    { userId: user.id, baseCurrency, todayIso },
+    clientContext,
+  )
 
   if (process.env.FINANZIA_COPILOT_DEBUG === '1') {
     console.log('[copilot:route]', {
@@ -129,10 +135,13 @@ export async function POST(req: Request) {
             baseCurrency,
             todayIso,
           })
+    const nextContext = routed.result.nextContext
     const stream = createUIMessageStream({
       execute({ writer }) {
         const id = `local-${todayIso}-${utterances.length}`
         writer.write({ type: 'data-answer', id, data: payload })
+        // Contexto actualizado para que el cliente lo reenvíe en el próximo turno.
+        writer.write({ type: 'data-context', id: `${id}-ctx`, data: nextContext })
       },
     })
     const response = createUIMessageStreamResponse({ stream })

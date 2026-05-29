@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
@@ -12,6 +12,7 @@ import { llmMessageToAnswer } from '@/lib/copilot/adapters/llm-to-ast'
 import { ChatStream } from '@/components/copilot/chat-stream'
 import { CopilotEmptyState } from '@/components/copilot/empty-state'
 import type { Turn } from '@/components/copilot/turn'
+import { EMPTY_CONTEXT, type ConversationContext } from '@/lib/copilot/conversation/reducer'
 import { useDialogStore } from './dialog-store'
 
 /**
@@ -42,7 +43,11 @@ export function CopilotDialog() {
   )
 }
 
-type LooseMsg = { id: string; role: string; parts?: Array<{ type?: string; text?: string }> }
+type LooseMsg = {
+  id: string
+  role: string
+  parts?: Array<{ type?: string; text?: string; data?: unknown }>
+}
 
 function userText(m: LooseMsg): string {
   return (m.parts ?? [])
@@ -58,11 +63,35 @@ function hasHeuristicPart(m: LooseMsg): boolean {
 function CopilotChat({ onClose }: { onClose: () => void }) {
   const router = useRouter()
   const [input, setInput] = useState('')
-  const { messages, sendMessage, status, error, stop, setMessages } = useChat({
-    transport: new DefaultChatTransport({ api: '/api/ai/chat' }),
-  })
+  // Contexto conversacional efímero: vive en el cliente y se reenvía cada turno.
+  const contextRef = useRef<ConversationContext>(EMPTY_CONTEXT)
+
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: '/api/ai/chat',
+        prepareSendMessagesRequest: (options) => ({
+          body: { ...(options.body as Record<string, unknown>), context: contextRef.current },
+        }),
+      }),
+    [],
+  )
+
+  const { messages, sendMessage, status, error, stop, setMessages } = useChat({ transport })
 
   const isStreaming = status === 'streaming' || status === 'submitted'
+
+  // Captura el contexto actualizado que emite el server (part data-context).
+  useEffect(() => {
+    const list = messages as unknown as LooseMsg[]
+    for (let i = list.length - 1; i >= 0; i--) {
+      const m = list[i]
+      if (m?.role !== 'assistant') continue
+      const ctxPart = (m.parts ?? []).find((p) => p.type === 'data-context')
+      if (ctxPart?.data) contextRef.current = ctxPart.data as ConversationContext
+      break
+    }
+  }, [messages])
 
   const turns: Turn[] = useMemo(() => {
     const list = messages as unknown as LooseMsg[]
@@ -121,7 +150,10 @@ function CopilotChat({ onClose }: { onClose: () => void }) {
           {messages.length > 0 && (
             <button
               type="button"
-              onClick={() => setMessages([])}
+              onClick={() => {
+                contextRef.current = EMPTY_CONTEXT
+                setMessages([])
+              }}
               className="text-text-tertiary hover:text-text rounded-[6px] px-2 py-1 text-[12px]"
             >
               Limpiar

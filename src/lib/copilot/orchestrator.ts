@@ -1,6 +1,7 @@
 import 'server-only'
 
-import { runEngineFromHistory, type EngineResult } from './engine'
+import { runEngine, runEngineFromHistory, type EngineResult } from './engine'
+import type { ConversationContext } from './conversation/reducer'
 import type { EngineContext } from './intents/types'
 
 /** Confianza mínima del motor local para responder sin deferir al LLM. */
@@ -20,8 +21,13 @@ export type Routed = {
 export async function routeLocal(
   utterances: string[],
   ctx: EngineContext,
+  context?: ConversationContext,
 ): Promise<Routed> {
-  const result = await runEngineFromHistory(utterances, ctx)
+  // Si el cliente envió el contexto, usamos el último turno + ese contexto
+  // (continuidad real, sin reconstruir). Si no, reconstruimos del historial.
+  const result = context
+    ? await runEngine(utterances[utterances.length - 1] ?? '', ctx, context)
+    : await runEngineFromHistory(utterances, ctx)
   const confident =
     result.resolvedIntent !== 'help' &&
     (result.viaEllipsis || result.classification.confidence >= LOCAL_MIN)
