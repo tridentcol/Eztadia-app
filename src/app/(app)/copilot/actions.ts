@@ -7,7 +7,7 @@ import { and, eq, isNull, or } from 'drizzle-orm'
 import { requireCurrentUser } from '@/lib/auth'
 import { db } from '@/lib/db/client'
 import { budgets, categories, profiles } from '@/lib/db/schema'
-import { getCopilotLlmConfig } from '@/lib/ai/copilot/config'
+import { COPILOT_MODEL_OPTIONS, getCopilotLlmConfig } from '@/lib/ai/copilot/config'
 import { createTransaction } from '@/app/(app)/mi-dinero/movimientos/actions'
 
 type ActionResult<T = void> =
@@ -170,12 +170,25 @@ export async function isCopilotAvailable(): Promise<{
   return { mode: 'heuristic', source: null }
 }
 
-const copilotPrefsSchema = z.object({
-  provider: z.enum(['openai', 'anthropic']).nullable().optional(),
-  model: z.string().max(60).nullable().optional(),
-  reasoningEffort: z.enum(['minimal', 'low', 'medium', 'high']).nullable().optional(),
-  textVerbosity: z.enum(['low', 'medium', 'high']).nullable().optional(),
-})
+const copilotPrefsSchema = z
+  .object({
+    provider: z.enum(['openai', 'anthropic']).nullable().optional(),
+    model: z.string().max(60).nullable().optional(),
+    reasoningEffort: z.enum(['minimal', 'low', 'medium', 'high']).nullable().optional(),
+    textVerbosity: z.enum(['low', 'medium', 'high']).nullable().optional(),
+  })
+  // Si se fijan ambos, el modelo debe pertenecer al catálogo del proveedor.
+  // (La resolución también lo sanea, pero rechazamos combos inválidos al guardar.)
+  .superRefine((v, ctx) => {
+    const model = v.model?.trim()
+    if (v.provider && model && !COPILOT_MODEL_OPTIONS[v.provider].includes(model)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `El modelo "${model}" no pertenece a ${v.provider}.`,
+        path: ['model'],
+      })
+    }
+  })
 
 export type CopilotPrefsInput = z.input<typeof copilotPrefsSchema>
 
@@ -201,19 +214,24 @@ export async function updateCopilotPreferences(
   if (p.textVerbosity) copilot.textVerbosity = p.textVerbosity
 
   try {
-    const existing = await db.query.profiles.findFirst({
-      where: eq(profiles.userId, user.id),
-      columns: { aiProfile: true },
-    })
-    const base = (existing?.aiProfile as Record<string, unknown> | null) ?? {}
-    const aiProfile: Record<string, unknown> = { ...base }
-    if (Object.keys(copilot).length > 0) aiProfile.copilot = copilot
-    else delete aiProfile.copilot
+    // Transacción + lock de fila: serializa el read-modify-write de aiProfile con
+    // otros writers (p. ej. updateFinancialPersona) y evita lost-update.
+    await db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({ aiProfile: profiles.aiProfile })
+        .from(profiles)
+        .where(eq(profiles.userId, user.id))
+        .for('update')
+      const base = (row?.aiProfile as Record<string, unknown> | null) ?? {}
+      const aiProfile: Record<string, unknown> = { ...base }
+      if (Object.keys(copilot).length > 0) aiProfile.copilot = copilot
+      else delete aiProfile.copilot
 
-    await db
-      .update(profiles)
-      .set({ aiProfile, updatedAt: new Date() })
-      .where(eq(profiles.userId, user.id))
+      await tx
+        .update(profiles)
+        .set({ aiProfile, updatedAt: new Date() })
+        .where(eq(profiles.userId, user.id))
+    })
   } catch {
     return { ok: false, error: { code: 'db_error', message: 'No se pudo guardar.' } }
   }

@@ -152,22 +152,27 @@ export async function updateFinancialPersona(
   const { mainGoal, riskTolerance } = parsed.data
 
   try {
-    const existing = await db.query.profiles.findFirst({
-      where: eq(profiles.userId, user.id),
-      columns: { aiProfile: true },
-    })
-    const aiProfile: Record<string, unknown> = {
-      ...((existing?.aiProfile as Record<string, unknown> | null) ?? {}),
-    }
-    if (mainGoal && mainGoal.trim()) aiProfile.mainGoal = mainGoal.trim()
-    else delete aiProfile.mainGoal
-    if (riskTolerance) aiProfile.riskTolerance = riskTolerance
-    else delete aiProfile.riskTolerance
+    // Transacción + lock de fila: el read-modify-write de aiProfile se serializa
+    // con otros writers (p. ej. updateCopilotPreferences) y evita lost-update.
+    await db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({ aiProfile: profiles.aiProfile })
+        .from(profiles)
+        .where(eq(profiles.userId, user.id))
+        .for('update')
+      const aiProfile: Record<string, unknown> = {
+        ...((row?.aiProfile as Record<string, unknown> | null) ?? {}),
+      }
+      if (mainGoal && mainGoal.trim()) aiProfile.mainGoal = mainGoal.trim()
+      else delete aiProfile.mainGoal
+      if (riskTolerance) aiProfile.riskTolerance = riskTolerance
+      else delete aiProfile.riskTolerance
 
-    await db
-      .update(profiles)
-      .set({ aiProfile, updatedAt: new Date() })
-      .where(eq(profiles.userId, user.id))
+      await tx
+        .update(profiles)
+        .set({ aiProfile, updatedAt: new Date() })
+        .where(eq(profiles.userId, user.id))
+    })
   } catch {
     return { ok: false, error: { code: 'DB_ERROR', message: 'Error al guardar. Intenta de nuevo.' } }
   }

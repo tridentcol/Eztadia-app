@@ -101,7 +101,10 @@ export async function POST(req: Request) {
   // local-first y todo va al LLM mientras se evalúa el modelo.
   // Config efectiva (env del operador + override del usuario) viene resuelta
   // dentro de `resolved.config`. forceLLM es del operador (env), preservado ahí.
-  const resolved = await resolveCopilotProvider(user.id)
+  // Reusa el aiProfile ya cargado (arriba, para baseCurrency) — sin segunda lectura.
+  const resolved = await resolveCopilotProvider(user.id, {
+    aiProfile: profile?.aiProfile ?? null,
+  })
   const forceLLM = resolved?.config.forceLLM ?? false
   const utterances = incoming
     .filter((m) => m?.role === 'user')

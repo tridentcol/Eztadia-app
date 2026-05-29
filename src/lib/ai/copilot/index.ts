@@ -51,17 +51,25 @@ export type ResolvedCopilotProvider = {
  */
 export async function resolveCopilotProvider(
   userId: string,
+  opts?: { aiProfile?: unknown },
 ): Promise<ResolvedCopilotProvider | null> {
   // Config del operador (env) con el override del usuario superpuesto
   // (provider/modelo/asertividad guardados en profiles.aiProfile.copilot).
+  // Si el caller ya cargó el perfil (el route lo hace para baseCurrency), pasa
+  // su aiProfile y evitamos una segunda lectura.
   let config = getCopilotLlmConfig()
   try {
-    const profile = await db.query.profiles.findFirst({
-      where: eq(profiles.userId, userId),
-      columns: { aiProfile: true },
-    })
+    const aiProfile =
+      opts !== undefined
+        ? opts.aiProfile
+        : ((
+            await db.query.profiles.findFirst({
+              where: eq(profiles.userId, userId),
+              columns: { aiProfile: true },
+            })
+          )?.aiProfile ?? null)
     const override = parseCopilotOverride(
-      (profile?.aiProfile as { copilot?: unknown } | null)?.copilot,
+      (aiProfile as { copilot?: unknown } | null)?.copilot,
     )
     config = applyUserOverride(config, override)
   } catch (err) {

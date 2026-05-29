@@ -74,22 +74,32 @@ export const COPILOT_MODEL_OPTIONS: Record<CopilotProvider, string[]> = {
   anthropic: ['claude-sonnet-4-6'],
 }
 
-/** Aplica el override del usuario sobre la config del entorno. Pura. */
+function defaultModelFor(provider: CopilotProvider): string {
+  return provider === 'openai' ? DEFAULT_OPENAI_MODEL : DEFAULT_ANTHROPIC_MODEL
+}
+
+/**
+ * Aplica el override del usuario sobre la config del entorno. Pura.
+ *
+ * Clave de seguridad: el modelo fijado por el usuario SOLO se honra si pertenece
+ * al catálogo del proveedor efectivo. Así, si el usuario fijó un modelo OpenAI y
+ * (a) eligió Anthropic o (b) el operador luego cambia COPILOT_LLM_PROVIDER a
+ * Anthropic, el modelo incompatible se descarta y se cae al default del
+ * proveedor — nunca se manda un id de OpenAI a getAnthropic() ni viceversa.
+ */
 export function applyUserOverride(
   base: CopilotLlmConfig,
   override: CopilotUserOverride | null | undefined,
 ): CopilotLlmConfig {
   if (!override) return base
   const provider = override.provider ?? base.provider
-  // Si cambió de proveedor sin elegir modelo, usar el default del nuevo.
+  // Modelo base: si el usuario cambió de proveedor, parte del default del nuevo;
+  // si no, conserva el del operador (que puede ser un modelo custom de env).
   const providerChanged = override.provider !== undefined && override.provider !== base.provider
-  const model =
-    override.model?.trim() ||
-    (providerChanged
-      ? provider === 'openai'
-        ? DEFAULT_OPENAI_MODEL
-        : DEFAULT_ANTHROPIC_MODEL
-      : base.model)
+  let model = providerChanged ? defaultModelFor(provider) : base.model
+  // Honra el pin solo si es del catálogo del proveedor efectivo.
+  const pinned = override.model?.trim()
+  if (pinned && COPILOT_MODEL_OPTIONS[provider].includes(pinned)) model = pinned
   return {
     ...base,
     provider,
