@@ -13,12 +13,23 @@ export async function PerfilSection({ userId }: Props) {
     getActiveSavingsPlan(userId),
   ])
 
+  const ai = (profile?.aiProfile as Record<string, unknown> | null) ?? {}
+  const mainGoal = typeof ai.mainGoal === 'string' ? ai.mainGoal : ''
+  const riskTolerance =
+    ai.riskTolerance === 'conservador' ||
+    ai.riskTolerance === 'moderado' ||
+    ai.riskTolerance === 'agresivo'
+      ? ai.riskTolerance
+      : null
+
   return (
     <PerfilFinancieroClient
       baseCurrency={(profile?.baseCurrency ?? 'COP') as 'COP' | 'USD' | 'EUR' | 'MXN'}
       locale={(profile?.locale ?? 'es-CO') as 'es-CO' | 'es-ES' | 'en-US' | 'es-MX'}
       activePlan={activePlan ?? null}
       isOnboarded={!!profile?.onboardedAt}
+      mainGoal={mainGoal}
+      riskTolerance={riskTolerance}
     />
   )
 }

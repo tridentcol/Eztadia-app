@@ -108,9 +108,17 @@ export async function buildProfileSnapshot(ctx: SnapshotContext): Promise<string
   const locale = profile?.locale ?? 'es-CO'
   const tz = profile?.timezone ?? 'America/Bogota'
   lines.push(`- Moneda base ${ctx.baseCurrency} · locale ${locale} · zona ${tz}.`)
-  const incomeRange = (profile?.aiProfile as { incomeRange?: string } | null)?.incomeRange
-  if (incomeRange && INCOME_LABEL[incomeRange]) {
-    lines.push(`- Ingreso declarado: ${INCOME_LABEL[incomeRange]} (${ctx.baseCurrency}).`)
+  const ai = profile?.aiProfile as
+    | { incomeRange?: string; mainGoal?: string; riskTolerance?: string }
+    | null
+  if (ai?.incomeRange && INCOME_LABEL[ai.incomeRange]) {
+    lines.push(`- Ingreso declarado: ${INCOME_LABEL[ai.incomeRange]} (${ctx.baseCurrency}).`)
+  }
+  if (ai?.mainGoal && ai.mainGoal.trim()) {
+    lines.push(`- Meta financiera principal: ${ai.mainGoal.trim()}.`)
+  }
+  if (ai?.riskTolerance) {
+    lines.push(`- Tolerancia al riesgo: ${ai.riskTolerance}.`)
   }
 
   // Cuentas + saldo total.

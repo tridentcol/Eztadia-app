@@ -127,3 +127,51 @@ export async function getActiveSavingsPlan(userId: string) {
     orderBy: (t, { desc }) => [desc(t.activeFrom)],
   })
 }
+
+const personaSchema = z.object({
+  mainGoal: z.string().max(140).nullable().optional(),
+  riskTolerance: z.enum(['conservador', 'moderado', 'agresivo']).nullable().optional(),
+})
+
+export type FinancialPersonaInput = z.input<typeof personaSchema>
+
+/**
+ * Guarda señales de personalización del usuario en `profiles.aiProfile`
+ * (mainGoal, riskTolerance). El profile snapshot del copiloto las inyecta para
+ * dar consejo más personalizado. Reemplaza ambos campos según el form (vacío =
+ * borrar). El ingreso ya se captura por separado en `aiProfile.incomeRange`.
+ */
+export async function updateFinancialPersona(
+  input: FinancialPersonaInput,
+): Promise<ActionResult> {
+  const user = await requireCurrentUser()
+  const parsed = personaSchema.safeParse(input)
+  if (!parsed.success) {
+    return { ok: false, error: { code: 'VALIDATION_ERROR', message: 'Datos inválidos.' } }
+  }
+  const { mainGoal, riskTolerance } = parsed.data
+
+  try {
+    const existing = await db.query.profiles.findFirst({
+      where: eq(profiles.userId, user.id),
+      columns: { aiProfile: true },
+    })
+    const aiProfile: Record<string, unknown> = {
+      ...((existing?.aiProfile as Record<string, unknown> | null) ?? {}),
+    }
+    if (mainGoal && mainGoal.trim()) aiProfile.mainGoal = mainGoal.trim()
+    else delete aiProfile.mainGoal
+    if (riskTolerance) aiProfile.riskTolerance = riskTolerance
+    else delete aiProfile.riskTolerance
+
+    await db
+      .update(profiles)
+      .set({ aiProfile, updatedAt: new Date() })
+      .where(eq(profiles.userId, user.id))
+  } catch {
+    return { ok: false, error: { code: 'DB_ERROR', message: 'Error al guardar. Intenta de nuevo.' } }
+  }
+
+  revalidatePath('/ajustes')
+  return { ok: true, data: undefined }
+}

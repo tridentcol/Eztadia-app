@@ -1,14 +1,22 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { SavingsPlan } from '@/lib/db/schema'
-import { updateSavingsPlan, type UpdatePlanInput } from './actions'
+import { updateFinancialPersona, updateSavingsPlan, type UpdatePlanInput } from './actions'
 
 type Currency = 'COP' | 'USD' | 'EUR' | 'MXN'
 type Locale = 'es-CO' | 'es-ES' | 'en-US' | 'es-MX'
 type SavingsMethod = 'percentage_income' | 'fixed_amount' | 'none' | 'other'
+type RiskTolerance = 'conservador' | 'moderado' | 'agresivo'
+
+const RISK_OPTIONS: { value: RiskTolerance; label: string }[] = [
+  { value: 'conservador', label: 'Conservador' },
+  { value: 'moderado', label: 'Moderado' },
+  { value: 'agresivo', label: 'Agresivo' },
+]
 
 const METHOD_LABELS: Record<SavingsMethod, string> = {
   percentage_income: 'Porcentaje del ingreso',
@@ -70,12 +78,28 @@ export function PerfilFinancieroClient({
   locale,
   activePlan,
   isOnboarded,
+  mainGoal: initialMainGoal,
+  riskTolerance: initialRisk,
 }: {
   baseCurrency: Currency
   locale: Locale
   activePlan: SavingsPlan | null
   isOnboarded: boolean
+  mainGoal: string
+  riskTolerance: RiskTolerance | null
 }) {
+  const [goal, setGoal] = useState(initialMainGoal)
+  const [risk, setRisk] = useState<RiskTolerance | null>(initialRisk)
+  const [personaPending, startPersona] = useTransition()
+
+  function savePersona() {
+    startPersona(async () => {
+      const res = await updateFinancialPersona({ mainGoal: goal, riskTolerance: risk })
+      if (res.ok) toast.success('Persona financiera guardada.')
+      else toast.error(res.error.message)
+    })
+  }
+
   const [editing, setEditing] = useState(false)
   const [method, setMethod] = useState<SavingsMethod>(
     (activePlan?.method as SavingsMethod | undefined) ?? 'none',
@@ -141,6 +165,49 @@ export function PerfilFinancieroClient({
         <p className="text-[11px] text-text-tertiary mt-2">
           Para cambiar moneda o región, contacta soporte o edita tu perfil de Clerk.
         </p>
+      </div>
+
+      {/* Persona financiera — alimenta la personalización del copiloto */}
+      <div className="flex flex-col gap-4 rounded-[12px] border border-border-default bg-surface p-4">
+        <div className="flex flex-col gap-1">
+          <p className="text-sm font-medium text-text">Persona financiera</p>
+          <p className="text-[13px] text-text-secondary">
+            Opcional. Ayuda al copiloto a personalizar el consejo a tus objetivos.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label htmlFor="main-goal" className="text-xs uppercase tracking-[0.06em] text-text-tertiary">
+            Meta financiera principal
+          </label>
+          <Input
+            id="main-goal"
+            type="text"
+            maxLength={140}
+            placeholder="Ej. comprar vivienda en 2 años, salir de deudas, fondo de emergencia"
+            value={goal}
+            onChange={(e) => setGoal(e.target.value)}
+          />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <p className="text-xs uppercase tracking-[0.06em] text-text-tertiary">Tolerancia al riesgo</p>
+          <div className="flex flex-wrap gap-2">
+            {RISK_OPTIONS.map((r) => (
+              <Chip
+                key={r.value}
+                selected={risk === r.value}
+                onClick={() => setRisk(risk === r.value ? null : r.value)}
+              >
+                {r.label}
+              </Chip>
+            ))}
+          </div>
+        </div>
+
+        <Button size="sm" className="self-start" onClick={savePersona} disabled={personaPending}>
+          {personaPending ? 'Guardando…' : 'Guardar persona'}
+        </Button>
       </div>
 
       {/* Savings plan */}
