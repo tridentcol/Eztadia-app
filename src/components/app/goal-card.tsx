@@ -64,6 +64,16 @@ export function GoalCard({ goal }: Props) {
           ? `${goal.daysToTarget} días`
           : 'Sin fecha'
 
+  // Ritmo necesario: cuánto hay que aportar por mes para llegar a target_date.
+  // Si no hay fecha o ya está cumplida, no aplica.
+  const remainingNum = Number.parseFloat(remaining)
+  const monthsLeft =
+    goal.daysToTarget !== null && goal.daysToTarget > 0
+      ? Math.max(1, goal.daysToTarget / 30)
+      : null
+  const requiredMonthlyPace =
+    monthsLeft !== null && remainingNum > 0 ? remainingNum / monthsLeft : null
+
   return (
     <article className="border-border-default bg-surface flex min-w-0 flex-col gap-3 rounded-[12px] border p-4">
       <header className="flex items-start justify-between gap-3">
@@ -95,6 +105,18 @@ export function GoalCard({ goal }: Props) {
           style={{ width: `${percentClamped * 100}%` }}
         />
       </div>
+
+      {requiredMonthlyPace !== null && (
+        <p className="text-text-tertiary text-[11px]">
+          Necesitas{' '}
+          <Amount
+            value={requiredMonthlyPace.toFixed(2)}
+            currency={goal.currency as CurrencyCode}
+            className="inline text-[11px]"
+          />{' '}
+          al mes para llegar a tiempo
+        </p>
+      )}
 
       {goal.linkedAccountName && (
         <p className="text-text-tertiary text-[11px]">

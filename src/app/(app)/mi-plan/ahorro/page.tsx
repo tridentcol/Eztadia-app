@@ -6,6 +6,7 @@ import { requireCurrentUser } from '@/lib/auth'
 import { db } from '@/lib/db/client'
 import { profiles } from '@/lib/db/schema'
 import { listSavingsPeriods, getSavingsHeroData } from '@/lib/db/queries/savings'
+import { listGoalsForUser } from '@/lib/db/queries/goals'
 import { getActiveSavingsPlan } from '@/app/(app)/ajustes/perfil-financiero/actions'
 import { formatMoney } from '@/lib/currency/format'
 import type { CurrencyCode } from '@/lib/currency/currencies'
@@ -90,15 +91,45 @@ function PeriodRow({
 export default async function AhorroPage() {
   const user = await requireCurrentUser()
 
-  const [periods, hero, profile, activePlan] = await Promise.all([
+  const [periods, hero, profile, activePlan, goals] = await Promise.all([
     listSavingsPeriods(user.id),
     getSavingsHeroData(user.id),
     db.query.profiles.findFirst({ where: eq(profiles.userId, user.id) }),
     getActiveSavingsPlan(user.id),
+    listGoalsForUser(user.id),
   ])
 
   const baseCurrency = profile?.baseCurrency ?? 'COP'
   const hasPlan = !!activePlan && activePlan.method !== 'none' && activePlan.method !== 'other'
+
+  // Allocation visual: metas activas con fecha futura y ritmo mensual necesario.
+  // El "ahorro mensual disponible" es el promedio de los últimos períodos
+  // cerrados (proxy razonable de capacidad mensual).
+  const monthlySavingsAvg =
+    periods.length > 0
+      ? periods.slice(0, 3).reduce((acc, p) => acc + Number.parseFloat(p.achievedAmount), 0) /
+        Math.min(3, periods.length)
+      : 0
+
+  const allocations = goals
+    .filter((g) => g.status === 'active' && g.daysToTarget !== null && g.daysToTarget > 0)
+    .map((g) => {
+      const remaining =
+        Number.parseFloat(g.targetAmount) - Number.parseFloat(g.currentAmount)
+      const monthsLeft = Math.max(1, (g.daysToTarget ?? 30) / 30)
+      const requiredMonthly = remaining > 0 ? remaining / monthsLeft : 0
+      const allocPct = monthlySavingsAvg > 0 ? requiredMonthly / monthlySavingsAvg : 0
+      return {
+        id: g.id,
+        name: g.name,
+        currency: g.currency as CurrencyCode,
+        requiredMonthly,
+        allocPct,
+      }
+    })
+    .filter((a) => a.requiredMonthly > 0)
+
+  const totalAllocPct = allocations.reduce((acc, a) => acc + a.allocPct, 0)
 
   if (periods.length === 0) {
     return (
@@ -197,6 +228,76 @@ export default async function AhorroPage() {
           </header>
           <div className="border-border-default bg-surface rounded-[12px] border px-5 py-6">
             <SavingsForecastChart periods={periods} />
+          </div>
+        </section>
+      )}
+
+      {/* Allocation a metas */}
+      {allocations.length > 0 && monthlySavingsAvg > 0 && (
+        <section className="flex flex-col gap-4">
+          <header className="flex items-baseline justify-between gap-3">
+            <h2 className="text-text text-sm font-semibold">Hacia tus metas</h2>
+            <Link
+              href="/mi-plan/metas"
+              className="text-text-secondary hover:text-text text-[13px] transition-colors"
+            >
+              Ver metas
+            </Link>
+          </header>
+          <div className="border-border-default bg-surface flex flex-col gap-4 rounded-[12px] border p-5">
+            <p className="text-text-tertiary text-[12px] leading-relaxed">
+              Con un promedio de{' '}
+              <span className="text-text-secondary tabular">
+                {formatMoney(monthlySavingsAvg, {
+                  currency: baseCurrency as CurrencyCode,
+                  compact: true,
+                })}
+              </span>{' '}
+              ahorrados al mes, así se reparte el esfuerzo entre tus metas activas.
+            </p>
+            <ul className="flex flex-col gap-3">
+              {allocations.map((a) => {
+                const widthPct = Math.min(100, a.allocPct * 100)
+                return (
+                  <li key={a.id} className="flex flex-col gap-1.5">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="text-text truncate text-[13px]">{a.name}</span>
+                      <span className="text-text-secondary tabular shrink-0 text-[12px]">
+                        {formatMoney(a.requiredMonthly, {
+                          currency: a.currency,
+                          compact: true,
+                        })}
+                        <span className="text-text-tertiary ml-2 text-[11px]">
+                          {Math.round(a.allocPct * 100)}%
+                        </span>
+                      </span>
+                    </div>
+                    <div className="bg-surface-hover h-1 overflow-hidden rounded-full">
+                      <div
+                        aria-hidden
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${widthPct}%`,
+                          background: 'var(--brand-purple-strong)',
+                        }}
+                      />
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+            {totalAllocPct > 1 && (
+              <p className="text-warning text-[11px]">
+                Sumadas, las metas requieren {Math.round(totalAllocPct * 100)}% de tu
+                ahorro mensual promedio. Considera alargar una fecha o ajustar el monto.
+              </p>
+            )}
+            {totalAllocPct < 1 && totalAllocPct > 0 && (
+              <p className="text-text-tertiary text-[11px]">
+                Te queda {Math.round((1 - totalAllocPct) * 100)}% del ahorro mensual
+                sin asignar a metas.
+              </p>
+            )}
           </div>
         </section>
       )}
