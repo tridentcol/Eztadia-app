@@ -82,6 +82,50 @@ export type ResolvedTurn = {
   alternative?: IntentId
 }
 
+/** Señales de referencia: cues de apertura, ordinales, o "ese/esa <entidad>". */
+const REF_OPEN = /\b(abrelo|abrila|abrir|ver detalle|abre (el|la|eso))\b/
+const REF_ORDINAL = /\b(el|la) (primer|segund|tercer|cuart|ultim)/
+const REF_DEMONSTRATIVE = /\b(ese|esa) (comercio|tienda|negocio|movimiento|gasto|pago|categoria|cuenta)\b/
+const REF_BARE = /^(ese|esa|eso)$/
+
+/**
+ * Resuelve una referencia ("ábrelo", "el segundo", "ese comercio") contra las
+ * entidades de la última respuesta → busca esa entidad (search-transactions por
+ * su etiqueta). PURO. Gate estricto para no confundir "ese mes" con referencia.
+ */
+function resolveReference(text: string, context: ConversationContext): ResolvedTurn | null {
+  const ents = context.lastEntities
+  if (!ents || ents.length === 0) return null
+
+  const isRef =
+    REF_OPEN.test(text) ||
+    REF_ORDINAL.test(text) ||
+    REF_DEMONSTRATIVE.test(text) ||
+    REF_BARE.test(text)
+  if (!isRef) return null
+
+  let pool = ents
+  if (/\b(comercio|tienda|negocio)\b/.test(text)) pool = ents.filter((e) => e.kind === 'merchant')
+  else if (/\bcategoria\b/.test(text)) pool = ents.filter((e) => e.kind === 'category')
+  if (pool.length === 0) pool = ents
+
+  let idx = 0
+  if (/\bsegund/.test(text)) idx = 1
+  else if (/\btercer/.test(text)) idx = 2
+  else if (/\bcuart/.test(text)) idx = 3
+  else if (/\bultim/.test(text)) idx = pool.length - 1
+
+  const entity = pool[idx] ?? pool[0]
+  if (!entity) return null
+
+  return {
+    intent: 'search-transactions',
+    slots: { query: entity.label },
+    decision: 'execute',
+    viaEllipsis: true,
+  }
+}
+
 /**
  * Aplica el contexto a la clasificación cruda. Si el classifier no encontró
  * señal fuerte (fallback o confidence ≤0.4) pero hay un intent previo y la
@@ -97,6 +141,10 @@ export function resolveTurn(params: {
   context: ConversationContext
 }): ResolvedTurn {
   const { tokens, slots, presentSlots, classification, context } = params
+
+  // Referencia a la respuesta anterior ("ese", "el segundo", "ábrelo").
+  const reference = resolveReference(tokens.text, context)
+  if (reference) return reference
 
   const startsWithConnector = CONNECTOR_RE.test(tokens.text)
   const hasSlot = SLOT_ONLY_KEYS.some((k) => presentSlots.has(k))

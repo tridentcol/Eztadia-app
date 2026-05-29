@@ -94,3 +94,36 @@ describe('resolveTurn — sin contexto', () => {
     expect(r.viaEllipsis).toBe(false)
   })
 })
+
+describe('resolveTurn — referencias', () => {
+  const ctxMerchants: ConversationContext = {
+    lastIntent: 'top-merchants',
+    lastSlots: {},
+    turnHistory: [],
+    lastEntities: [
+      { kind: 'merchant', label: 'Uber' },
+      { kind: 'merchant', label: 'Taxi' },
+    ],
+  }
+
+  it('"el segundo" → busca la segunda entidad', () => {
+    const r = run('el segundo', {}, weak('help'), ctxMerchants)
+    expect(r.intent).toBe('search-transactions')
+    expect(r.slots.query).toBe('Taxi')
+  })
+
+  it('"ese comercio" → busca el primer comercio', () => {
+    const r = run('ese comercio', {}, weak('help'), ctxMerchants)
+    expect(r.slots.query).toBe('Uber')
+  })
+
+  it('"ese mes" NO es referencia (gate estricto)', () => {
+    const r = run('ese mes', { period: PERIOD }, weak('help'), ctxMerchants)
+    expect(r.intent).not.toBe('search-transactions')
+  })
+
+  it('sin entidades previas no resuelve referencia', () => {
+    const r = run('el segundo', {}, weak('help'), EMPTY_CONTEXT)
+    expect(r.slots.query).toBeUndefined()
+  })
+})
