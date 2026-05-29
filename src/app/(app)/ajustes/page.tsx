@@ -68,7 +68,7 @@ export default async function AjustesPage({
         {/* Sidebar interno — sólo desktop. En mobile la navegación es la
             propia lista de acordeón. */}
         <aside aria-label="Secciones de ajustes" className="hidden lg:block">
-          <nav className="sticky top-[72px] flex flex-col gap-1">
+          <nav className="sticky top-[calc(var(--topbar-total)+16px)] flex flex-col gap-1">
             {SECTIONS.map((s) => (
               <a
                 key={s.id}

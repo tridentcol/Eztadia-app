@@ -439,13 +439,13 @@ function DayHeader({
   const label = formatDayHeader(group.day)
   const netLabel = `${positive ? '+' : '−'}${Math.abs(Math.round(group.netBase)).toLocaleString('es-CO')} ${group.baseCurrency}`
   const count = group.txs.length
-  // El topbar mide 56px + env(safe-area-inset-top) (en standalone iOS
-  // la status bar suma 44–59px más). El sticky day-header se ancla por
+  // --topbar-total = altura del topbar + safe-area-inset-top (en standalone
+  // iOS la status bar suma 44–59px más). El sticky day-header se ancla por
   // debajo del topbar. En desktop la tabla además tiene su propio
   // thead sticky, así que cargamos un top mayor para no superponerlos.
   const stickyTop = desktop
-    ? 'calc(56px + env(safe-area-inset-top) + 41px)'
-    : 'calc(56px + env(safe-area-inset-top))'
+    ? 'calc(var(--topbar-total) + 41px)'
+    : 'var(--topbar-total)'
   return (
     <header
       className={cn(
@@ -481,7 +481,7 @@ function DesktopHead() {
   return (
     <div
       className="border-border-default bg-surface text-text-tertiary sticky z-20 grid grid-cols-[120px_1fr_180px_180px_140px_40px] gap-x-4 border-b px-5 py-3 text-[11px] uppercase tracking-[0.08em]"
-      style={{ top: 'calc(56px + env(safe-area-inset-top))' }}
+      style={{ top: 'var(--topbar-total)' }}
       role="row"
     >
       <span className="font-medium">Fecha</span>

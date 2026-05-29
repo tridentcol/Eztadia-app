@@ -29,7 +29,7 @@ export function SectionTabs({ tabs, ariaLabel }: Props) {
   return (
     <nav
       aria-label={ariaLabel}
-      className="border-border-default bg-background sticky top-14 z-20 -mx-4 border-b sm:-mx-6 lg:-mx-8"
+      className="border-border-default bg-background sticky top-[var(--topbar-total)] z-20 -mx-4 border-b sm:-mx-6 lg:-mx-8"
     >
       <div className="mx-auto flex max-w-[1120px] gap-1 overflow-x-auto px-2 sm:px-4 lg:px-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {tabs.map((tab) => {
