@@ -17,6 +17,7 @@ import { NewDebtDialog } from '@/components/app/new-debt-dialog'
 import { CopilotDialog } from '@/components/app/copilot-dialog'
 import { DialogsBundle } from '@/components/app/dialogs-bundle'
 import { OnboardingOverlay } from '@/components/app/onboarding-overlay'
+import { PageTransition } from '@/components/app/page-transition'
 import { countUnreadAlerts } from '@/lib/db/queries/alerts'
 
 export default async function AppLayout({
@@ -49,7 +50,7 @@ export default async function AppLayout({
           tabIndex={-1}
           className="mx-auto w-full max-w-[1120px] px-4 pt-6 pb-[88px] sm:px-6 md:pb-10 lg:px-8 lg:py-10"
         >
-          {children}
+          <PageTransition>{children}</PageTransition>
         </main>
       </SidebarInset>
       <MobileNav />
