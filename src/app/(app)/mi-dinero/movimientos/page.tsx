@@ -18,6 +18,7 @@ import { RecategorizeButton } from '@/components/app/recategorize-button'
 import { ImportDialog } from '@/components/app/import-dialog'
 import { DayPickerNav } from '@/components/app/day-picker-nav'
 import { TransactionActionsMenu } from '@/components/app/transaction-actions-menu'
+import { MovimientosFilters } from '@/components/app/movimientos-filters'
 import { cn } from '@/lib/utils'
 
 export const metadata: Metadata = {
@@ -217,6 +218,7 @@ export default async function TransaccionesPage({
           {!dayFilter && (
             <>
               <DayPickerNav initialDay={null} />
+              <MovimientosFilters categories={categoryOptions} />
               <ImportDialog accounts={accounts} batches={batches} />
               <RecategorizeButton pending={unclassified} />
             </>
