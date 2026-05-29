@@ -35,7 +35,7 @@ export function CopilotDialog() {
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
         <Dialog.Content
           aria-describedby={undefined}
-          className="border-border-default bg-surface fixed z-50 flex flex-col overflow-hidden border shadow-2xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 inset-0 h-svh w-screen rounded-none sm:inset-auto sm:top-[12vh] sm:left-1/2 sm:h-[640px] sm:max-h-[76dvh] sm:w-[680px] sm:max-w-[calc(100vw-32px)] sm:-translate-x-1/2 sm:rounded-[16px] data-[state=closed]:sm:zoom-out-95 data-[state=open]:sm:zoom-in-95"
+          className="border-border-default bg-surface fixed z-50 flex flex-col overflow-hidden border shadow-2xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 inset-0 h-dvh w-screen rounded-none sm:inset-auto sm:top-[12vh] sm:left-1/2 sm:h-[640px] sm:max-h-[76dvh] sm:w-[680px] sm:max-w-[calc(100vw-32px)] sm:-translate-x-1/2 sm:rounded-[16px] data-[state=closed]:sm:zoom-out-95 data-[state=open]:sm:zoom-in-95"
         >
           <Dialog.Title className="sr-only">Preguntar a Finanzia</Dialog.Title>
           {open && <CopilotChat onClose={close} />}
