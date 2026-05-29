@@ -7,6 +7,7 @@ import { requireCurrentUser } from '@/lib/auth'
 import { db } from '@/lib/db/client'
 import { conversations, messages, profiles } from '@/lib/db/schema'
 import { resolveCopilotProvider, runCopilotChat } from '@/lib/ai/copilot'
+import { getCopilotRouting, parseCopilotOverride } from '@/lib/ai/copilot/config'
 import { routeLocal } from '@/lib/copilot/orchestrator'
 import { retrievalFallback } from '@/lib/copilot/fallback/retrieval'
 import type { ConversationContext } from '@/lib/copilot/conversation/reducer'
@@ -94,14 +95,15 @@ export async function POST(req: Request) {
   const incoming = parsedBody.messages as IncomingMessage[]
   const todayIso = new Date().toISOString().slice(0, 10)
 
-  // ---- Ruteo local-first. ----
-  // Por default intentamos el motor local primero: si es confiado responde
-  // local (gratis, aunque haya LLM key). Si difiere, va al LLM (si hay provider)
-  // o al fallback de recuperación. Con COPILOT_FORCE_LLM=1 se salta el
-  // local-first y todo va al LLM mientras se evalúa el modelo.
-  // Config efectiva (env del operador + override del usuario) viene resuelta
-  // dentro de `resolved.config`. forceLLM es del operador (env), preservado ahí.
-  // Reusa el aiProfile ya cargado (arriba, para baseCurrency) — sin segunda lectura.
+  // ---- Selección de motor. ----
+  // Depende de la SELECCIÓN del usuario (aiProfile.copilot.routing, default
+  // 'local'): 'local' → motor heurístico + fallback, sin IA; 'llm' → fuerza el
+  // modelo elegido. El operador puede forzar el LLM con COPILOT_FORCE_LLM=1.
+  // Config efectiva (env + override) viene en `resolved.config`; reusa el
+  // aiProfile ya cargado (para baseCurrency) — sin segunda lectura.
+  const routing = getCopilotRouting(
+    parseCopilotOverride((profile?.aiProfile as { copilot?: unknown } | null)?.copilot),
+  )
   const resolved = await resolveCopilotProvider(user.id, {
     aiProfile: profile?.aiProfile ?? null,
   })
@@ -120,13 +122,15 @@ export async function POST(req: Request) {
     clientContext,
   )
 
-  // Al LLM si hay provider y (forzamos o el motor local difirió).
-  const goLLM = Boolean(resolved) && (forceLLM || routed.mode === 'defer')
+  // Al LLM solo si hay provider y el usuario eligió un modelo (routing 'llm')
+  // o el operador fuerza. Sin auto-defer: 'local' nunca usa IA.
+  const goLLM = Boolean(resolved) && (routing === 'llm' || forceLLM)
 
   if (process.env.FINANZIA_COPILOT_DEBUG === '1') {
     console.log('[copilot:route]', {
       last: utterances[utterances.length - 1],
       mode: goLLM ? 'llm' : routed.mode === 'local' ? 'local' : 'fallback',
+      routing,
       intent: routed.result.resolvedIntent,
       confidence: Number(routed.result.classification.confidence.toFixed(2)),
       hasLLM: Boolean(resolved),

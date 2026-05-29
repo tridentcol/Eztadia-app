@@ -5,14 +5,21 @@ import { useRouter } from 'next/navigation'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import { Dialog } from 'radix-ui'
+import { toast } from 'sonner'
 
 import { icons } from '@/lib/design/icons'
 import { Button } from '@/components/ui/button'
 import { llmMessageToAnswer } from '@/lib/copilot/adapters/llm-to-ast'
 import { ChatStream } from '@/components/copilot/chat-stream'
 import { CopilotEmptyState } from '@/components/copilot/empty-state'
+import { CopilotEngineMenu } from '@/components/copilot/engine-menu'
 import type { Turn } from '@/components/copilot/turn'
 import { EMPTY_CONTEXT, type ConversationContext } from '@/lib/copilot/conversation/reducer'
+import {
+  getCopilotChoices,
+  setCopilotEngine,
+  type CopilotChoice,
+} from '@/app/(app)/copilot/actions'
 import { useDialogStore } from './dialog-store'
 
 /**
@@ -54,10 +61,6 @@ function userText(m: LooseMsg): string {
     .filter((p) => p.type === 'text' && typeof p.text === 'string')
     .map((p) => p.text as string)
     .join('')
-}
-
-function hasHeuristicPart(m: LooseMsg): boolean {
-  return (m.parts ?? []).some((p) => p.type === 'data-answer')
 }
 
 function CopilotChat({ onClose }: { onClose: () => void }) {
@@ -104,12 +107,41 @@ function CopilotChat({ onClose }: { onClose: () => void }) {
     return out
   }, [messages, isStreaming])
 
-  const mode: 'llm' | 'heuristic' | null = useMemo(() => {
-    const list = messages as unknown as LooseMsg[]
-    const assistant = list.filter((m) => m.role === 'assistant')
-    if (assistant.length === 0) return null
-    return assistant.some(hasHeuristicPart) ? 'heuristic' : 'llm'
-  }, [messages])
+  // Motor del copiloto: Local (default) o un modelo de IA con key integrada.
+  // Se carga al abrir y persiste por usuario; el badge del header lo refleja.
+  const [engineOptions, setEngineOptions] = useState<CopilotChoice[]>([])
+  const [engineValue, setEngineValue] = useState<string>('local')
+
+  useEffect(() => {
+    let active = true
+    getCopilotChoices()
+      .then((r) => {
+        if (!active) return
+        setEngineOptions(r.options)
+        setEngineValue(r.current)
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [])
+
+  function selectEngine(next: string) {
+    if (next === engineValue) return
+    const prev = engineValue
+    setEngineValue(next) // optimista
+    setCopilotEngine(next)
+      .then((res) => {
+        if (!res.ok) {
+          setEngineValue(prev)
+          toast.error(res.error.message)
+        }
+      })
+      .catch(() => {
+        setEngineValue(prev)
+        toast.error('No se pudo cambiar el motor.')
+      })
+  }
 
   function submit(text: string) {
     const t = text.trim()
@@ -132,23 +164,8 @@ function CopilotChat({ onClose }: { onClose: () => void }) {
       <header className="border-border-default flex items-center justify-between gap-2 border-b px-4 py-3">
         <div className="flex min-w-0 items-center gap-2">
           <Spark strokeWidth={1.5} className="size-4 shrink-0" style={{ color: 'var(--accent-ai)' }} />
-          <span className="text-text truncate text-sm font-semibold">Finanzia</span>
-          {mode && (
-            <span
-              className="text-text-tertiary flex shrink-0 items-center gap-1 text-[10px] uppercase tracking-[0.08em]"
-              title={
-                mode === 'llm'
-                  ? 'Respuesta generada por el modelo de IA'
-                  : 'Respuesta del motor local (sin IA)'
-              }
-            >
-              <span
-                className={`size-1.5 rounded-full ${mode === 'llm' ? 'bg-accent-ai' : 'bg-text-tertiary'}`}
-                aria-hidden
-              />
-              {mode === 'llm' ? 'IA' : 'local'}
-            </span>
-          )}
+          <span className="text-text shrink-0 text-sm font-semibold">Finanzia</span>
+          <CopilotEngineMenu options={engineOptions} value={engineValue} onSelect={selectEngine} />
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {messages.length > 0 && (

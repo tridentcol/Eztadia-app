@@ -5,9 +5,16 @@ import { revalidatePath } from 'next/cache'
 import { and, eq, isNull, or } from 'drizzle-orm'
 
 import { requireCurrentUser } from '@/lib/auth'
+import { env } from '@/lib/env'
 import { db } from '@/lib/db/client'
 import { budgets, categories, profiles } from '@/lib/db/schema'
-import { COPILOT_MODEL_OPTIONS, getCopilotLlmConfig } from '@/lib/ai/copilot/config'
+import {
+  COPILOT_MODEL_OPTIONS,
+  getCopilotLlmConfig,
+  parseCopilotOverride,
+  type CopilotProvider,
+} from '@/lib/ai/copilot/config'
+import { listUserIntegrations } from '@/lib/integrations/store'
 import { createTransaction } from '@/app/(app)/mi-dinero/movimientos/actions'
 
 type ActionResult<T = void> =
@@ -170,52 +177,95 @@ export async function isCopilotAvailable(): Promise<{
   return { mode: 'heuristic', source: null }
 }
 
-const copilotPrefsSchema = z
-  .object({
-    provider: z.enum(['openai', 'anthropic']).nullable().optional(),
-    model: z.string().max(60).nullable().optional(),
-    reasoningEffort: z.enum(['minimal', 'low', 'medium', 'high']).nullable().optional(),
-    textVerbosity: z.enum(['low', 'medium', 'high']).nullable().optional(),
-  })
-  // Si se fijan ambos, el modelo debe pertenecer al catálogo del proveedor.
-  // (La resolución también lo sanea, pero rechazamos combos inválidos al guardar.)
-  .superRefine((v, ctx) => {
-    const model = v.model?.trim()
-    if (v.provider && model && !COPILOT_MODEL_OPTIONS[v.provider].includes(model)) {
-      ctx.addIssue({
-        code: 'custom',
-        message: `El modelo "${model}" no pertenece a ${v.provider}.`,
-        path: ['model'],
-      })
-    }
-  })
+export type CopilotChoice = {
+  /** 'local' o `${provider}:${model}`. */
+  value: string
+  label: string
+  kind: 'local' | 'model'
+  provider?: CopilotProvider
+}
 
-export type CopilotPrefsInput = z.input<typeof copilotPrefsSchema>
+/** ¿El usuario tiene un proveedor de chat disponible (Vault scope chat / env)? */
+function providerAvailable(
+  provider: CopilotProvider,
+  integrations: Awaited<ReturnType<typeof listUserIntegrations>>,
+): boolean {
+  const userChat = integrations.some(
+    (i) => i.provider === provider && i.status === 'active' && i.scopes.includes('chat'),
+  )
+  if (userChat) return true
+  if (env.AI_GATEWAY_API_KEY) return true
+  return Boolean(provider === 'openai' ? env.OPENAI_API_KEY : env.ANTHROPIC_API_KEY)
+}
 
 /**
- * Guarda la preferencia de modelo/proveedor del copiloto del usuario en
- * `profiles.aiProfile.copilot`. Solo persiste los campos elegidos (los null =
- * "usar el default del operador" se omiten). Si no queda ninguno, borra la
- * subclave para volver al default del env. resolveCopilotProvider la aplica.
+ * Opciones del selector de motor del copiloto: siempre "Local", más cada modelo
+ * cuyo proveedor tenga key integrada (la del usuario con scope chat, o la del
+ * operador). Devuelve también la selección actual del usuario (default 'local').
  */
-export async function updateCopilotPreferences(
-  input: CopilotPrefsInput,
-): Promise<ActionResult> {
+export async function getCopilotChoices(): Promise<{
+  options: CopilotChoice[]
+  current: string
+}> {
   const user = await requireCurrentUser()
-  const parsed = copilotPrefsSchema.safeParse(input)
-  if (!parsed.success) {
-    return { ok: false, error: { code: 'validation', message: 'Preferencias inválidas.' } }
+  const integrations = await listUserIntegrations(user.id)
+
+  const options: CopilotChoice[] = [
+    { value: 'local', label: 'Local (sin IA)', kind: 'local' },
+  ]
+  for (const provider of ['openai', 'anthropic'] as const) {
+    if (!providerAvailable(provider, integrations)) continue
+    for (const model of COPILOT_MODEL_OPTIONS[provider]) {
+      options.push({ value: `${provider}:${model}`, label: model, kind: 'model', provider })
+    }
   }
-  const p = parsed.data
-  const copilot: Record<string, string> = {}
-  if (p.provider) copilot.provider = p.provider
-  if (p.model && p.model.trim()) copilot.model = p.model.trim()
-  if (p.reasoningEffort) copilot.reasoningEffort = p.reasoningEffort
-  if (p.textVerbosity) copilot.textVerbosity = p.textVerbosity
+
+  const profile = await db.query.profiles.findFirst({
+    where: eq(profiles.userId, user.id),
+    columns: { aiProfile: true },
+  })
+  const override = parseCopilotOverride(
+    (profile?.aiProfile as { copilot?: unknown } | null)?.copilot,
+  )
+  let current = 'local'
+  if (override?.routing === 'llm' && override.provider && override.model) {
+    const value = `${override.provider}:${override.model}`
+    // Solo si el modelo guardado sigue disponible; si no, cae a local.
+    if (options.some((o) => o.value === value)) current = value
+  }
+
+  return { options, current }
+}
+
+const engineSchema = z.string().min(1).max(80)
+
+/**
+ * Persiste el motor elegido por el usuario en `profiles.aiProfile.copilot`:
+ * 'local' (sin IA) o `${provider}:${model}` (fuerza ese modelo). Atómico
+ * (transacción + FOR UPDATE) para no pisar otras subclaves de aiProfile.
+ */
+export async function setCopilotEngine(value: string): Promise<ActionResult> {
+  const user = await requireCurrentUser()
+  const parsed = engineSchema.safeParse(value)
+  if (!parsed.success) {
+    return { ok: false, error: { code: 'validation', message: 'Selección inválida.' } }
+  }
+
+  let routing: 'local' | 'llm' = 'local'
+  let provider: CopilotProvider | undefined
+  let model: string | undefined
+  if (parsed.data !== 'local') {
+    const [p, m] = parsed.data.split(':')
+    if ((p === 'openai' || p === 'anthropic') && m && COPILOT_MODEL_OPTIONS[p].includes(m)) {
+      routing = 'llm'
+      provider = p
+      model = m
+    } else {
+      return { ok: false, error: { code: 'validation', message: 'Modelo no disponible.' } }
+    }
+  }
 
   try {
-    // Transacción + lock de fila: serializa el read-modify-write de aiProfile con
-    // otros writers (p. ej. updateFinancialPersona) y evita lost-update.
     await db.transaction(async (tx) => {
       const [row] = await tx
         .select({ aiProfile: profiles.aiProfile })
@@ -223,19 +273,23 @@ export async function updateCopilotPreferences(
         .where(eq(profiles.userId, user.id))
         .for('update')
       const base = (row?.aiProfile as Record<string, unknown> | null) ?? {}
-      const aiProfile: Record<string, unknown> = { ...base }
-      if (Object.keys(copilot).length > 0) aiProfile.copilot = copilot
-      else delete aiProfile.copilot
-
+      const prev = (base.copilot as Record<string, unknown> | null) ?? {}
+      let copilot: Record<string, unknown>
+      if (routing === 'local') {
+        copilot = { ...prev, routing: 'local' }
+        delete copilot.provider
+        delete copilot.model
+      } else {
+        copilot = { ...prev, routing: 'llm', provider, model }
+      }
       await tx
         .update(profiles)
-        .set({ aiProfile, updatedAt: new Date() })
+        .set({ aiProfile: { ...base, copilot }, updatedAt: new Date() })
         .where(eq(profiles.userId, user.id))
     })
   } catch {
     return { ok: false, error: { code: 'db_error', message: 'No se pudo guardar.' } }
   }
 
-  revalidatePath('/ajustes')
   return { ok: true, data: undefined }
 }

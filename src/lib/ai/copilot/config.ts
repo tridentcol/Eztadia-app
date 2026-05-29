@@ -15,6 +15,8 @@ import { env } from '@/lib/env'
 export type CopilotProvider = 'openai' | 'anthropic'
 export type ReasoningEffort = 'minimal' | 'low' | 'medium' | 'high'
 export type TextVerbosity = 'low' | 'medium' | 'high'
+/** Qué impulsa al copiloto: el motor local (default) o un modelo de IA. */
+export type CopilotRouting = 'local' | 'llm'
 
 export type CopilotLlmConfig = {
   provider: CopilotProvider
@@ -62,10 +64,22 @@ function normalizeVerbosity(v: string | undefined): TextVerbosity {
  * (testing) quedan a nivel operador (env), no se exponen al usuario.
  */
 export type CopilotUserOverride = {
+  /** Selección explícita del usuario. Ausente = local (default). */
+  routing?: CopilotRouting
   provider?: CopilotProvider
   model?: string
   reasoningEffort?: ReasoningEffort
   textVerbosity?: TextVerbosity
+}
+
+/**
+ * Qué motor usa el copiloto según la selección del usuario. Default: 'local'
+ * (el modelo de IA es opt-in explícito por usuario, eligiendo un modelo).
+ */
+export function getCopilotRouting(
+  override: CopilotUserOverride | null | undefined,
+): CopilotRouting {
+  return override?.routing === 'llm' ? 'llm' : 'local'
 }
 
 /** Modelos ofrecidos en el selector de la UI, por proveedor. */
@@ -114,6 +128,7 @@ export function parseCopilotOverride(raw: unknown): CopilotUserOverride | null {
   if (typeof raw !== 'object' || raw === null) return null
   const r = raw as Record<string, unknown>
   const out: CopilotUserOverride = {}
+  if (r.routing === 'local' || r.routing === 'llm') out.routing = r.routing
   if (r.provider === 'openai' || r.provider === 'anthropic') out.provider = r.provider
   if (typeof r.model === 'string' && r.model.trim()) out.model = r.model.trim()
   if (

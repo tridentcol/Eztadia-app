@@ -1,5 +1,3 @@
-import { eq } from 'drizzle-orm'
-
 import {
   AVAILABLE_SCOPES,
   DEFAULT_SCOPES,
@@ -7,15 +5,7 @@ import {
   type Provider,
 } from '@/lib/integrations/store'
 import { env } from '@/lib/env'
-import { db } from '@/lib/db/client'
-import { profiles } from '@/lib/db/schema'
-import {
-  COPILOT_MODEL_OPTIONS,
-  getCopilotLlmConfig,
-  parseCopilotOverride,
-} from '@/lib/ai/copilot/config'
 import { IntegrationCard } from '@/components/app/integration-card'
-import { CopilotModelSelector } from '@/components/app/settings/copilot-model-selector'
 
 const PROVIDERS: Array<{
   id: Provider
@@ -27,14 +17,14 @@ const PROVIDERS: Array<{
     id: 'openai',
     name: 'OpenAI',
     description:
-      'Cerebro del copiloto por defecto (modelo gpt-5 mini) si activas el scope Generación / Chat, y embeddings (text-embedding-3-small) para la auto-categorización si activas Embeddings. Key sk- desde platform.openai.com.',
+      'Cerebro del copiloto (modelos gpt-5) si activas el scope Generación / Chat, y embeddings (text-embedding-3-small) para la auto-categorización si activas Embeddings. Key sk- desde platform.openai.com.',
     signupUrl: 'https://platform.openai.com/api-keys',
   },
   {
     id: 'anthropic',
     name: 'Anthropic Claude',
     description:
-      'Alternativa de chat para el copiloto y para las recomendaciones de /insights (se usa cuando seleccionas Anthropic como proveedor). Key sk-ant- desde console.anthropic.com.',
+      'Alternativa de chat para el copiloto y para las recomendaciones de /insights. Key sk-ant- desde console.anthropic.com.',
     signupUrl: 'https://console.anthropic.com/settings/keys',
   },
 ]
@@ -47,16 +37,6 @@ export async function IntegracionesIASection({ userId }: Props) {
   const operatorGateway = !!env.AI_GATEWAY_API_KEY
   const operatorAnthropic = !!env.ANTHROPIC_API_KEY
   const operatorOpenai = !!env.OPENAI_API_KEY
-
-  // Modelo del copiloto: default del operador (env) + override del usuario.
-  const operatorConfig = getCopilotLlmConfig()
-  const profile = await db.query.profiles.findFirst({
-    where: eq(profiles.userId, userId),
-    columns: { aiProfile: true },
-  })
-  const copilotOverride = parseCopilotOverride(
-    (profile?.aiProfile as { copilot?: unknown } | null)?.copilot,
-  )
 
   return (
     <div className="flex flex-col gap-6">
@@ -89,12 +69,15 @@ export async function IntegracionesIASection({ userId }: Props) {
         ))}
       </div>
 
-      <CopilotModelSelector
-        operatorProvider={operatorConfig.provider}
-        operatorModel={operatorConfig.model}
-        modelOptions={COPILOT_MODEL_OPTIONS}
-        override={copilotOverride}
-      />
+      <div className="border-border-default flex flex-col gap-3 rounded-[12px] border p-5">
+        <h3 className="text-text text-sm font-semibold">Motor del copiloto</h3>
+        <p className="text-text-secondary text-sm leading-relaxed">
+          El copiloto usa el motor local por defecto. Para que responda con IA,
+          conecta una key con scope Generación / Chat y elige el modelo desde el
+          selector dentro de la ventana del copiloto (Cmd+J). Solo aparecen los
+          modelos cuyo proveedor tiene una key integrada.
+        </p>
+      </div>
 
       <div className="border-border-default flex flex-col gap-3 rounded-[12px] border p-5">
         <h3 className="text-text text-sm font-semibold">Modo sin claves</h3>
