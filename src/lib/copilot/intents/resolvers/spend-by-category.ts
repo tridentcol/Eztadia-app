@@ -49,7 +49,24 @@ export const resolveSpendByCategory: IntentResolver = async (slots, ctx) => {
         })),
       },
     ]
-    return { intro: `Gastaste ${money(total, ctx.baseCurrency)} en ${slots.category.name}.`, blocks }
+    // Sugerir un presupuesto mensual redondeado al gasto observado.
+    const suggested = Math.round(total / 10000) * 10000
+    return {
+      intro: `Gastaste ${money(total, ctx.baseCurrency)} en ${slots.category.name}.`,
+      blocks,
+      actions:
+        suggested > 0
+          ? [
+              {
+                kind: 'create-budget-for-category',
+                label: `Crear presupuesto de ${money(suggested, ctx.baseCurrency)}`,
+                categoryId: slots.category.id,
+                categoryName: slots.category.name,
+                suggestedAmount: String(suggested),
+              },
+            ]
+          : undefined,
+    }
   }
 
   // Caso agregado por categoría.

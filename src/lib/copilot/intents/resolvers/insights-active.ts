@@ -18,6 +18,7 @@ export const resolveInsightsActive: IntentResolver = async (_slots, ctx) => {
     }
   }
 
+  const top = list[0]!
   return {
     intro: `Tengo ${list.length} ${list.length === 1 ? 'lectura' : 'lecturas'} para ti.`,
     blocks: [
@@ -33,6 +34,10 @@ export const resolveInsightsActive: IntentResolver = async (_slots, ctx) => {
             i.severity === 'warning' ? 'warning' : i.severity === 'notice' ? 'neutral' : 'neutral',
         })),
       },
+    ],
+    actions: [
+      { kind: 'mark-insight-read', label: 'Marcar la primera como vista', insightId: top.id },
+      { kind: 'navigate', label: 'Ver todas', href: '/mi-historia/insights' },
     ],
   }
 }
