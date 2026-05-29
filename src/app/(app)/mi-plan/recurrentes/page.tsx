@@ -23,7 +23,12 @@ export default async function RecurringPage() {
     .map((r) => r.id)
   const [driftSnapshots, proposals] = await Promise.all([
     getRecurringDriftSnapshots(user.id, driftRuleIds),
-    proposeRecurringRules(user.id),
+    // Si la propuesta falla por cualquier razón (query, RLS, datos
+    // inconsistentes), la página no debe romper — fallback a [].
+    proposeRecurringRules(user.id).catch((err) => {
+      console.error('proposeRecurringRules failed:', err)
+      return []
+    }),
   ])
 
   return (

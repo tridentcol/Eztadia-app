@@ -127,7 +127,10 @@ export async function proposeRecurringRules(
         merchant_norm,
         COUNT(*)::int AS count,
         AVG(amount)::text AS avg_amount,
-        EXTRACT(EPOCH FROM (MAX(date) - MIN(date))) / NULLIF(COUNT(*) - 1, 0) / 86400.0 AS avg_interval_days,
+        /* date - date en Postgres retorna integer (días), no interval.
+           Dividir directamente — usar EXTRACT EPOCH falla porque EPOCH
+           no acepta integer. */
+        (MAX(date) - MIN(date))::numeric / NULLIF(COUNT(*) - 1, 0) AS avg_interval_days,
         MAX(date)::text AS last_seen
       FROM txs
       GROUP BY merchant_norm
