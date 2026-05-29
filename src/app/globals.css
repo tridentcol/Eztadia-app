@@ -315,6 +315,17 @@
     overscroll-behavior-y: none;
   }
 
+  /* Typing indicator del copiloto — tres dots con opacity 0.3→1→0.3.
+     Sin shimmer ni gradiente. El stagger se aplica vía animation-delay inline.
+     Bajo prefers-reduced-motion la regla de abajo lo neutraliza. */
+  @keyframes copilot-typing {
+    0%, 80%, 100% { opacity: 0.3; }
+    40% { opacity: 1; }
+  }
+  .copilot-typing-dot {
+    animation: copilot-typing 1.2s var(--ease-smooth) infinite;
+  }
+
   /* Respeto a usuarios con preferencia de reduced-motion (regla 12). */
   @media (prefers-reduced-motion: reduce) {
     *,
