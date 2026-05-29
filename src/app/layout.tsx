@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { cookies } from 'next/headers'
 import { Inter, Geist_Mono, Fraunces, Sora } from 'next/font/google'
 import { ClerkProvider } from '@clerk/nextjs'
@@ -46,6 +46,25 @@ export const metadata: Metadata = {
     template: '%s · finanzia',
   },
   description: 'Finanzas personales con IA.',
+  appleWebApp: {
+    capable: true,
+    title: 'finanzia',
+    statusBarStyle: 'black-translucent',
+  },
+  formatDetection: {
+    telephone: false,
+  },
+}
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: '(prefers-color-scheme: dark)', color: '#0A0A0B' },
+    { media: '(prefers-color-scheme: light)', color: '#FAFAF9' },
+  ],
+  colorScheme: 'dark light',
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
 }
 
 export default async function RootLayout({
