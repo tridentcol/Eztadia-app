@@ -7,8 +7,8 @@ import { requireCurrentUser } from '@/lib/auth'
 import { db } from '@/lib/db/client'
 import { conversations, messages, profiles } from '@/lib/db/schema'
 import { runCopilotChat } from '@/lib/ai/copilot'
-import { runHeuristic } from '@/lib/heuristic/responder'
-import { formatHeuristicMarkdown } from '@/lib/heuristic/format-response'
+import { getAnthropic } from '@/lib/ai/anthropic'
+import { runEngineFromHistory } from '@/lib/copilot/engine'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -28,12 +28,29 @@ const bodySchema = z
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+type IncomingMessage = {
+  role?: string
+  parts?: Array<{ type?: string; text?: string }>
+}
+
+function textOf(message: IncomingMessage | undefined): string {
+  if (!message?.parts) return ''
+  return message.parts
+    .filter((p) => p?.type === 'text' && typeof p.text === 'string')
+    .map((p) => p.text as string)
+    .join('')
+    .trim()
+}
+
 /**
  * Endpoint del copiloto. Recibe `{ id?, messages, ... }` desde `useChat` y
- * devuelve un `UIMessageStream`. Persiste el turno completo (user input +
- * respuesta completa) en `conversations` + `messages` al finalizar.
+ * devuelve un `UIMessageStream`.
  *
- * Auth: Clerk en middleware. Si no hay LLM disponible, enruta a heurístico.
+ * - Con LLM disponible: stream del modelo + persistencia del turno en
+ *   `conversations`/`messages`.
+ * - Sin LLM: motor heurístico interno, que emite un único part `data-answer`
+ *   con el AnswerPayload estructurado. Conversación EFÍMERA — no toca la tabla
+ *   `messages`; el contexto multi-turno se reconstruye del historial recibido.
  */
 export async function POST(req: Request) {
   let user
@@ -71,9 +88,46 @@ export async function POST(req: Request) {
   })
   const baseCurrency = profile?.baseCurrency ?? 'COP'
 
-  // `parsedBody.id` viene del client (nanoid de useChat). Sólo lo reutilizamos
-  // como conversation_id si es un UUID válido y existe ya en DB (turnos
-  // anteriores). En otro caso creamos una conversación nueva.
+  const incoming = parsedBody.messages as IncomingMessage[]
+  const todayIso = new Date().toISOString().slice(0, 10)
+
+  // ---- Decide modo: con provider → LLM; sin él → heurístico. ----
+  const provider = await getAnthropic({ userId: user.id })
+
+  if (!provider) {
+    const utterances = incoming
+      .filter((m) => m?.role === 'user')
+      .map((m) => textOf(m))
+      .filter((t) => t.length > 0)
+
+    const result = await runEngineFromHistory(utterances, {
+      userId: user.id,
+      baseCurrency,
+      todayIso,
+    })
+
+    if (process.env.FINANZIA_COPILOT_DEBUG === '1') {
+      console.log('[copilot:heuristic]', {
+        last: utterances[utterances.length - 1],
+        intent: result.resolvedIntent,
+        ellipsis: result.viaEllipsis,
+        confidence: result.classification.confidence,
+        ranking: result.classification.ranking.slice(0, 3),
+      })
+    }
+
+    const stream = createUIMessageStream({
+      execute({ writer }) {
+        const id = `heuristic-${todayIso}-${utterances.length}`
+        writer.write({ type: 'data-answer', id, data: result.payload })
+      },
+    })
+    const response = createUIMessageStreamResponse({ stream })
+    response.headers.set('x-copilot-mode', 'heuristic')
+    return response
+  }
+
+  // ---- Camino LLM: persiste el turno. ----
   let conversationId: string | undefined
   if (parsedBody.id && UUID_RE.test(parsedBody.id)) {
     const existing = await db
@@ -99,12 +153,6 @@ export async function POST(req: Request) {
     )
   }
 
-  // Persistimos sólo el ÚLTIMO mensaje del usuario antes de invocar el LLM
-  // — el historial previo ya está en DB de turnos anteriores.
-  const incoming = parsedBody.messages as Array<{
-    role?: string
-    parts?: Array<{ type?: string; text?: string }>
-  }>
   const lastUserMessage = [...incoming].reverse().find((m) => m?.role === 'user')
   if (lastUserMessage) {
     await db.insert(messages).values({
@@ -140,54 +188,12 @@ export async function POST(req: Request) {
   })
 
   if (!result) {
-    // Fallback heurístico: sin LLM provider, corremos el motor interno y
-    // emitimos un UIMessageStream con un único text part. El cliente no
-    // distingue — solo ve el mensaje formateado.
-    const lastText =
-      lastUserMessage?.parts?.find((p) => p?.type === 'text')?.text ?? ''
-
-    const heuristic = await runHeuristic(lastText, {
-      userId: user.id,
-      baseCurrency,
-      todayIso: new Date().toISOString().slice(0, 10),
-    })
-    const markdown = formatHeuristicMarkdown(heuristic)
-
-    const stream = createUIMessageStream({
-      async execute({ writer }) {
-        const id = 'heuristic-' + Date.now()
-        writer.write({ type: 'text-start', id })
-        writer.write({ type: 'text-delta', id, delta: markdown })
-        writer.write({ type: 'text-end', id })
-
-        try {
-          await db.insert(messages).values({
-            conversationId: conversationId!,
-            role: 'assistant',
-            content: {
-              text: markdown,
-              finishReason: 'heuristic',
-              toolCalls: null,
-              toolResults: null,
-            } as Record<string, unknown>,
-          })
-          await db
-            .update(conversations)
-            .set({ updatedAt: new Date() })
-            .where(eq(conversations.id, conversationId!))
-        } catch (err) {
-          console.error('[heuristic] persist falló:', err)
-        }
-      },
-    })
-
-    const response = createUIMessageStreamResponse({ stream })
-    response.headers.set('x-conversation-id', conversationId)
-    response.headers.set('x-copilot-mode', 'heuristic')
-    return response
+    return NextResponse.json(
+      { ok: false, error: { code: 'llm_unavailable', message: 'El modelo no está disponible.' } },
+      { status: 503 },
+    )
   }
 
-  // Devolvemos el UIMessageStream y propagamos el conversationId vía header.
   const response = result.toUIMessageStreamResponse()
   response.headers.set('x-conversation-id', conversationId)
   response.headers.set('x-copilot-mode', 'llm')

@@ -16,7 +16,9 @@ import { extractMerchant } from './nlu/slots/merchant'
 import {
   resolveTurn,
   pushTurn,
+  EMPTY_CONTEXT,
   type ConversationContext,
+  type ResolvedTurn,
 } from './conversation/reducer'
 import { buildFollowUps } from './conversation/follow-ups'
 
@@ -42,20 +44,25 @@ function presentKeys(slots: Slots): Set<SlotKey> {
   return set
 }
 
+type Analysis = {
+  resolved: ResolvedTurn
+  classification: ClassifierResult
+}
+
 /**
- * Punto de entrada del motor heurístico. Tokeniza, extrae slots, clasifica,
- * resuelve elipsis con el contexto, despacha al resolver y adjunta follow-ups.
- * Nunca lanza: ante un fallo del resolver devuelve un mensaje legible.
+ * Extrae slots, clasifica y resuelve elipsis — SIN ejecutar el resolver.
+ * `cheap` omite la extracción de merchant (carga histórico) para abaratar la
+ * reconstrucción de contexto desde turnos pasados.
  */
-export async function runEngine(
+async function analyze(
   message: string,
   ctx: EngineContext,
   context: ConversationContext,
-): Promise<EngineResult> {
+  cheap: boolean,
+): Promise<Analysis> {
   const tokens = tokenize(message)
-
-  // --- Slots: puros + categoría/cuenta (queries baratas). ---
   const slots: Slots = {}
+
   const period = extractPeriod(message, ctx.todayIso)
   if (period) slots.period = period
   const moneySlot = extractMoney(message)
@@ -73,11 +80,9 @@ export async function runEngine(
   if (catRes?.candidates) slots.categoryCandidates = catRes.candidates
   if (account) slots.account = account
 
-  // --- Clasificación inicial. ---
   let classification = classify(tokens, presentKeys(slots), INTENT_CATALOG)
 
-  // Merchant es caro (carga histórico): sólo si el turno apunta a búsqueda.
-  if (classification.intent === 'search-transactions' && !slots.merchant) {
+  if (!cheap && classification.intent === 'search-transactions' && !slots.merchant) {
     const merchant = await extractMerchant(message, ctx.userId, ctx.todayIso)
     if (merchant) {
       slots.merchant = merchant
@@ -85,7 +90,6 @@ export async function runEngine(
     }
   }
 
-  // --- Elipsis / continuación. ---
   const resolved = resolveTurn({
     tokens,
     slots,
@@ -94,12 +98,26 @@ export async function runEngine(
     context,
   })
 
+  return { resolved, classification }
+}
+
+/**
+ * Punto de entrada del motor heurístico. Tokeniza, extrae slots, clasifica,
+ * resuelve elipsis con el contexto, despacha al resolver y adjunta follow-ups.
+ * Nunca lanza: ante un fallo del resolver devuelve un mensaje legible.
+ */
+export async function runEngine(
+  message: string,
+  ctx: EngineContext,
+  context: ConversationContext = EMPTY_CONTEXT,
+): Promise<EngineResult> {
+  const { resolved, classification } = await analyze(message, ctx, context, false)
+
   const payload = await dispatch(resolved.intent, resolved.slots, resolved.decision, ctx, {
     missingSlot: resolved.missingSlot,
     alternative: resolved.alternative,
   })
 
-  // Follow-ups según el intent ejecutado (omitidos en clarificaciones).
   if (resolved.decision === 'execute' && !payload.followUps) {
     const followUps = buildFollowUps(resolved.intent, resolved.slots)
     if (followUps.length > 0) payload.followUps = followUps
@@ -120,14 +138,38 @@ export async function runEngine(
   }
 }
 
+/**
+ * Reconstruye el contexto conversacional plegando los turnos previos del
+ * usuario (análisis barato, sin resolver ni merchant) y ejecuta el último.
+ * Mantiene el flujo stateless: el server no persiste el contexto del
+ * heurístico (efímero, no toca `messages`).
+ */
+export async function runEngineFromHistory(
+  utterances: string[],
+  ctx: EngineContext,
+): Promise<EngineResult> {
+  if (utterances.length === 0) {
+    return runEngine('', ctx, EMPTY_CONTEXT)
+  }
+  const prior = utterances.slice(0, -1).slice(-4) // máx 4 turnos previos
+  const last = utterances[utterances.length - 1] as string
+
+  let context = EMPTY_CONTEXT
+  for (const u of prior) {
+    const { resolved } = await analyze(u, ctx, context, true)
+    context = pushTurn(context, { utterance: u, intent: resolved.intent, slots: resolved.slots })
+  }
+
+  return runEngine(last, ctx, context)
+}
+
 async function dispatch(
   intent: EngineResult['resolvedIntent'],
   slots: Slots,
-  decision: ReturnType<typeof resolveTurn>['decision'],
+  decision: ResolvedTurn['decision'],
   ctx: EngineContext,
   extra: { missingSlot?: SlotKey; alternative?: string },
 ): Promise<AnswerPayload> {
-  // Categoría ambigua → preguntar cuál.
   if (slots.categoryCandidates && slots.categoryCandidates.length >= 2) {
     const [a, b] = slots.categoryCandidates
     return {
@@ -167,7 +209,6 @@ async function dispatch(
   }
 }
 
-/** Chip sugerido representativo de un intent (para clarify-intent). */
 function hintFor(intent: string): Array<{ label: string; utterance: string }> {
   const map: Record<string, { label: string; utterance: string }> = {
     'show-balance': { label: 'Mi saldo', utterance: 'cuál es mi saldo' },

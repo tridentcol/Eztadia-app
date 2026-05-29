@@ -1,28 +1,25 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import { Dialog } from 'radix-ui'
-import { toast } from 'sonner'
 
 import { icons } from '@/lib/design/icons'
 import { Button } from '@/components/ui/button'
-import {
-  confirmProposedBudget,
-  confirmProposedTransaction,
-} from '@/app/(app)/copilot/actions'
-import { cn } from '@/lib/utils'
+import { llmMessageToAnswer } from '@/lib/copilot/adapters/llm-to-ast'
+import { ChatStream } from '@/components/copilot/chat-stream'
+import { CopilotEmptyState } from '@/components/copilot/empty-state'
+import type { Turn } from '@/components/copilot/turn'
 import { useDialogStore } from './dialog-store'
 
 /**
- * Copiloto Finanzia — Cmd+K → "Preguntar a Finanzia".
+ * Copiloto Finanzia — Cmd+J → "Preguntar a Finanzia".
  *
- * UI streaming con `useChat` v6. Cada mensaje se compone de parts (text,
- * tool calls, tool results). Para tools propose-*, renderizamos una tarjeta
- * de confirmación con botones Confirmar / Descartar — la mutación REAL pasa
- * por la server action correspondiente (regla 6 del mandato).
+ * Contenedor del chat. El stream (ChatStream) es compartido: el LLM produce
+ * UIMessages que un adaptador convierte a AnswerPayload, y el heurístico
+ * emite el AnswerPayload directo en un part `data-answer`. Ambos se ven igual.
  */
 export function CopilotDialog() {
   const active = useDialogStore((s) => s.active)
@@ -45,29 +42,66 @@ export function CopilotDialog() {
   )
 }
 
+type LooseMsg = { id: string; role: string; parts?: Array<{ type?: string; text?: string }> }
+
+function userText(m: LooseMsg): string {
+  return (m.parts ?? [])
+    .filter((p) => p.type === 'text' && typeof p.text === 'string')
+    .map((p) => p.text as string)
+    .join('')
+}
+
+function hasHeuristicPart(m: LooseMsg): boolean {
+  return (m.parts ?? []).some((p) => p.type === 'data-answer')
+}
+
 function CopilotChat({ onClose }: { onClose: () => void }) {
   const router = useRouter()
   const [input, setInput] = useState('')
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const { messages, sendMessage, status, error, stop } = useChat({
+  const { messages, sendMessage, status, error, stop, setMessages } = useChat({
     transport: new DefaultChatTransport({ api: '/api/ai/chat' }),
   })
 
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+  const isStreaming = status === 'streaming' || status === 'submitted'
+
+  const turns: Turn[] = useMemo(() => {
+    const list = messages as unknown as LooseMsg[]
+    const out: Turn[] = []
+    for (const m of list) {
+      if (m.role === 'user') {
+        out.push({ id: m.id, role: 'user', text: userText(m) })
+      } else if (m.role === 'assistant') {
+        const payload = llmMessageToAnswer(m)
+        if (payload) out.push({ id: m.id, role: 'assistant', payload })
+        else out.push({ id: m.id, role: 'assistant', pending: true })
+      }
     }
+    const last = list[list.length - 1]
+    if (isStreaming && (!last || last.role === 'user')) {
+      out.push({ id: 'pending', role: 'assistant', pending: true })
+    }
+    return out
+  }, [messages, isStreaming])
+
+  const mode: 'llm' | 'heuristic' | null = useMemo(() => {
+    const list = messages as unknown as LooseMsg[]
+    const assistant = list.filter((m) => m.role === 'assistant')
+    if (assistant.length === 0) return null
+    return assistant.some(hasHeuristicPart) ? 'heuristic' : 'llm'
   }, [messages])
+
+  function submit(text: string) {
+    const t = text.trim()
+    if (!t || isStreaming) return
+    setInput('')
+    sendMessage({ text: t })
+  }
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const text = input.trim()
-    if (!text || status === 'streaming' || status === 'submitted') return
-    setInput('')
-    sendMessage({ text })
+    submit(input)
   }
 
-  const isStreaming = status === 'streaming' || status === 'submitted'
   const Spark = icons.sparkles
   const X = icons.x
 
@@ -75,43 +109,41 @@ function CopilotChat({ onClose }: { onClose: () => void }) {
     <div className="flex h-full flex-col">
       <header className="border-border-default flex items-center justify-between gap-3 border-b px-4 py-3">
         <div className="flex items-center gap-2">
-          <Spark
-            strokeWidth={1.5}
-            className="size-4"
-            style={{ color: 'var(--accent-ai)' }}
-          />
+          <Spark strokeWidth={1.5} className="size-4" style={{ color: 'var(--accent-ai)' }} />
           <span className="text-text text-sm font-semibold">Finanzia</span>
-          <span className="text-text-tertiary text-[11px]">copiloto</span>
+          {mode && (
+            <span className="text-text-tertiary border-border-default rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em]">
+              {mode === 'llm' ? 'IA' : 'heurístico'}
+            </span>
+          )}
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Cerrar"
-          className="text-text-tertiary hover:text-text -m-1 rounded-[6px] p-1"
-        >
-          <X strokeWidth={1.5} className="size-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          {messages.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setMessages([])}
+              className="text-text-tertiary hover:text-text rounded-[6px] px-2 py-1 text-[12px]"
+            >
+              Limpiar
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Cerrar"
+            className="text-text-tertiary hover:text-text -m-1 rounded-[6px] p-1"
+          >
+            <X strokeWidth={1.5} className="size-4" />
+          </button>
+        </div>
       </header>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4">
-        {messages.length === 0 && (
-          <EmptyHints
-            onPick={(q) => {
-              setInput('')
-              sendMessage({ text: q })
-            }}
-          />
+      <div className="flex-1 overflow-y-auto px-5 py-4">
+        {messages.length === 0 ? (
+          <CopilotEmptyState onPick={submit} />
+        ) : (
+          <ChatStream turns={turns} onFollowUp={submit} onConfirm={() => router.refresh()} />
         )}
-        <ul className="flex flex-col gap-4">
-          {messages.map((m) => (
-            <li key={m.id}>
-              <MessageBubble
-                message={m}
-                onConfirm={() => router.refresh()}
-              />
-            </li>
-          ))}
-        </ul>
       </div>
 
       {error && (
@@ -132,7 +164,6 @@ function CopilotChat({ onClose }: { onClose: () => void }) {
           placeholder="Pregunta cualquier cosa sobre tus finanzas"
           className="text-text placeholder:text-text-tertiary min-h-[44px] flex-1 bg-transparent px-2 py-2 text-base outline-none sm:text-sm"
           autoFocus
-          disabled={false}
         />
         {isStreaming ? (
           <Button type="button" variant="outline" size="sm" onClick={() => stop()}>
@@ -146,392 +177,4 @@ function CopilotChat({ onClose }: { onClose: () => void }) {
       </form>
     </div>
   )
-}
-
-function EmptyHints({ onPick }: { onPick: (q: string) => void }) {
-  const hints = [
-    'Cuál es mi saldo total ahora',
-    'Cuánto gasté en restaurantes este mes',
-    'Cómo van mis presupuestos',
-    'Qué ha detectado Finanzia últimamente',
-  ]
-  return (
-    <div className="flex flex-col gap-3 py-6">
-      <p className="editorial text-text-secondary text-base italic">
-        Pregúntame sobre saldos, gastos, presupuestos o lo que Finanzia ha
-        detectado. Si propongo registrar algo, te lo pongo para confirmar.
-      </p>
-      <div className="flex flex-col gap-2">
-        {hints.map((h) => (
-          <button
-            key={h}
-            type="button"
-            onClick={() => onPick(h)}
-            className="border-border-default hover:bg-surface-hover text-text-secondary hover:text-text rounded-[8px] border px-3 py-2 text-left text-[13px] transition-colors"
-          >
-            {h}
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-type UIMessageLike = ReturnType<typeof useChat>['messages'][number]
-type MessagePart = UIMessageLike['parts'][number]
-
-function MessageBubble({
-  message,
-  onConfirm,
-}: {
-  message: UIMessageLike
-  onConfirm: () => void
-}) {
-  const isUser = message.role === 'user'
-
-  return (
-    <div className={cn('flex flex-col gap-2', isUser && 'items-end')}>
-      {message.parts.map((part, idx) => (
-        <MessagePartView
-          key={`${message.id}-${idx}`}
-          part={part}
-          partKey={`${message.id}-${idx}`}
-          isUser={isUser}
-          onConfirm={onConfirm}
-        />
-      ))}
-    </div>
-  )
-}
-
-function MessagePartView({
-  part,
-  partKey,
-  isUser,
-  onConfirm,
-}: {
-  part: MessagePart
-  partKey: string
-  isUser: boolean
-  onConfirm: () => void
-}) {
-  if (part.type === 'text') {
-    return (
-      <div
-        className={cn(
-          'max-w-[88%] rounded-[12px] px-3.5 py-2.5 text-sm leading-relaxed',
-          isUser
-            ? 'bg-surface-hover text-text'
-            : 'text-text-secondary px-1 py-0',
-        )}
-      >
-        <p className="whitespace-pre-wrap">{part.text}</p>
-      </div>
-    )
-  }
-
-  if (typeof part.type === 'string' && part.type.startsWith('tool-')) {
-    return (
-      <ToolPartView
-        part={part as unknown as ToolPartLike}
-        partKey={partKey}
-        onConfirm={onConfirm}
-      />
-    )
-  }
-
-  return null
-}
-
-type ToolPartLike = {
-  type: `tool-${string}`
-  state?: string
-  output?: unknown
-  errorText?: string
-}
-
-function ToolPartView({
-  part,
-  partKey,
-  onConfirm,
-}: {
-  part: ToolPartLike
-  partKey: string
-  onConfirm: () => void
-}) {
-  const toolName = part.type.replace(/^tool-/, '')
-  const state = part.state
-  const Spark = icons.sparkles
-
-  // Tools propose-* con resultado: render confirmación.
-  if (state === 'output-available') {
-    const output = part.output
-    if (toolName === 'proposeCreateTransaction' && isCreateProposal(output)) {
-      return (
-        <ProposalCard
-          partKey={partKey}
-          title="Propuesta: nueva transacción"
-          summary={summarizeTxProposal(output)}
-          onConfirm={async () => {
-            const res = await confirmProposedTransaction({
-              proposal: {
-                kind: output.proposal.kind,
-                accountId: output.proposal.accountId,
-                transferAccountId: output.proposal.transferAccountId,
-                categoryId: output.proposal.categoryId,
-                date: output.proposal.date,
-                amount: output.proposal.amount,
-                currency: output.proposal.currency,
-                description: output.proposal.description,
-                merchant: output.proposal.merchant,
-                notes: output.proposal.notes,
-              },
-            })
-            if (!res.ok) {
-              toast.error(res.error.message)
-              return false
-            }
-            toast.success('Transacción registrada.')
-            onConfirm()
-            return true
-          }}
-        />
-      )
-    }
-    if (toolName === 'proposeSetBudget' && isBudgetProposal(output)) {
-      return (
-        <ProposalCard
-          partKey={partKey}
-          title={
-            output.proposal.mode === 'update'
-              ? 'Propuesta: actualizar presupuesto'
-              : 'Propuesta: nuevo presupuesto'
-          }
-          summary={summarizeBudgetProposal(output)}
-          onConfirm={async () => {
-            const res = await confirmProposedBudget({
-              proposal: {
-                mode: output.proposal.mode,
-                existingBudgetId: output.proposal.existingBudgetId,
-                categoryId: output.proposal.categoryId,
-                amount: output.proposal.amount,
-                period: output.proposal.period,
-                rollover: output.proposal.rollover,
-              },
-            })
-            if (!res.ok) {
-              toast.error(res.error.message)
-              return false
-            }
-            toast.success('Presupuesto guardado.')
-            onConfirm()
-            return true
-          }}
-        />
-      )
-    }
-    // Read tools: render una insignia compacta — el LLM ya tradujo el dato a texto.
-    return (
-      <span className="text-text-tertiary inline-flex items-center gap-1 text-[11px]">
-        <Spark
-          strokeWidth={1.5}
-          className="size-3"
-          style={{ color: 'var(--accent-ai)' }}
-        />
-        consulta · {toolName}
-      </span>
-    )
-  }
-
-  if (state === 'input-streaming' || state === 'input-available') {
-    return (
-      <span className="text-text-tertiary inline-flex items-center gap-1 text-[11px]">
-        <Spark
-          strokeWidth={1.5}
-          className="size-3 animate-pulse"
-          style={{ color: 'var(--accent-ai)' }}
-        />
-        consultando · {toolName}…
-      </span>
-    )
-  }
-
-  if (state === 'output-error') {
-    return (
-      <span className="text-negative text-[11px]">
-        Error en {toolName}: {part.errorText ?? 'desconocido'}
-      </span>
-    )
-  }
-
-  return null
-}
-
-function ProposalCard({
-  partKey,
-  title,
-  summary,
-  onConfirm,
-}: {
-  partKey: string
-  title: string
-  summary: Array<{ label: string; value: string }>
-  onConfirm: () => Promise<boolean>
-}) {
-  const [state, setState] = useState<'idle' | 'pending' | 'confirmed' | 'dismissed'>(
-    'idle',
-  )
-
-  async function doConfirm() {
-    setState('pending')
-    const ok = await onConfirm()
-    setState(ok ? 'confirmed' : 'idle')
-  }
-
-  return (
-    <article
-      data-key={partKey}
-      className="border-border-default bg-surface-elevated flex max-w-[88%] flex-col gap-3 rounded-[12px] border p-4"
-    >
-      <header className="flex items-center gap-2">
-        <span
-          className="size-1.5 rounded-full"
-          style={{ backgroundColor: 'var(--accent-ai)' }}
-          aria-hidden
-        />
-        <span className="text-text text-[13px] font-semibold">{title}</span>
-      </header>
-      <dl className="flex flex-col gap-1">
-        {summary.map((s) => (
-          <div key={s.label} className="flex items-baseline justify-between gap-3">
-            <dt className="text-text-tertiary text-[11px] uppercase tracking-[0.08em]">
-              {s.label}
-            </dt>
-            <dd className="text-text-secondary text-[13px]">{s.value}</dd>
-          </div>
-        ))}
-      </dl>
-      {state === 'idle' && (
-        <div className="flex items-center justify-end gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setState('dismissed')}
-          >
-            Descartar
-          </Button>
-          <Button type="button" size="sm" onClick={doConfirm}>
-            Confirmar
-          </Button>
-        </div>
-      )}
-      {state === 'pending' && (
-        <p className="text-text-tertiary text-right text-[11px]">Guardando…</p>
-      )}
-      {state === 'confirmed' && (
-        <p className="text-positive text-right text-[11px]">Confirmado.</p>
-      )}
-      {state === 'dismissed' && (
-        <p className="text-text-tertiary text-right text-[11px]">Descartado.</p>
-      )}
-    </article>
-  )
-}
-
-// ---------- type guards y formateo ----------
-
-type CreateProposal = {
-  ok: true
-  proposal: {
-    kind: 'income' | 'expense' | 'transfer'
-    accountId: string
-    accountName: string
-    accountCurrency: string
-    transferAccountId: string | null
-    transferAccountName: string | null
-    categoryId: string | null
-    categoryName: string | null
-    date: string
-    amount: string
-    currency: string
-    description: string
-    merchant: string | null
-    notes: string | null
-  }
-}
-
-function isCreateProposal(o: unknown): o is CreateProposal {
-  if (!o || typeof o !== 'object') return false
-  const c = o as { ok?: unknown; proposal?: unknown }
-  if (c.ok !== true) return false
-  return (
-    !!c.proposal &&
-    typeof c.proposal === 'object' &&
-    'accountId' in (c.proposal as Record<string, unknown>)
-  )
-}
-
-function summarizeTxProposal(p: CreateProposal) {
-  const out = [
-    { label: 'Tipo', value: p.proposal.kind },
-    {
-      label: 'Cuenta',
-      value:
-        p.proposal.kind === 'transfer' && p.proposal.transferAccountName
-          ? `${p.proposal.accountName} → ${p.proposal.transferAccountName}`
-          : p.proposal.accountName,
-    },
-    { label: 'Monto', value: `${p.proposal.amount} ${p.proposal.currency}` },
-    { label: 'Fecha', value: p.proposal.date },
-    { label: 'Descripción', value: p.proposal.description },
-  ]
-  if (p.proposal.categoryName) {
-    out.push({ label: 'Categoría', value: p.proposal.categoryName })
-  }
-  return out
-}
-
-type BudgetProposal = {
-  ok: true
-  proposal: {
-    mode: 'create' | 'update'
-    existingBudgetId: string | null
-    categoryId: string
-    categoryName: string
-    amount: string
-    period: 'monthly' | 'weekly' | 'yearly'
-    rollover: boolean
-  }
-}
-
-function isBudgetProposal(o: unknown): o is BudgetProposal {
-  if (!o || typeof o !== 'object') return false
-  const c = o as { ok?: unknown; proposal?: unknown }
-  if (c.ok !== true) return false
-  return (
-    !!c.proposal &&
-    typeof c.proposal === 'object' &&
-    'period' in (c.proposal as Record<string, unknown>)
-  )
-}
-
-function summarizeBudgetProposal(p: BudgetProposal) {
-  return [
-    { label: 'Categoría', value: p.proposal.categoryName },
-    { label: 'Monto', value: p.proposal.amount },
-    {
-      label: 'Período',
-      value:
-        p.proposal.period === 'monthly'
-          ? 'Mensual'
-          : p.proposal.period === 'weekly'
-            ? 'Semanal'
-            : 'Anual',
-    },
-    {
-      label: 'Rollover',
-      value: p.proposal.rollover ? 'Sí (acumula sobrante)' : 'No',
-    },
-  ]
 }
