@@ -1,13 +1,12 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { eq } from 'drizzle-orm'
 
 import { requireCurrentUser } from '@/lib/auth'
 import { db } from '@/lib/db/client'
 import { profiles } from '@/lib/db/schema'
-import { eq } from 'drizzle-orm'
 import { listAccountsWithBalance } from '@/lib/db/queries/accounts'
 import { listTransactionsForUser } from '@/lib/db/queries/transactions'
-import { listBudgetsWithProgress } from '@/lib/db/queries/budgets'
 import { listUnreadInsights } from '@/lib/db/queries/insights'
 import { getDebtsSummary } from '@/lib/db/queries/debts'
 import { listRecurringForUser } from '@/lib/db/queries/recurring'
@@ -15,17 +14,18 @@ import { getRatesForPairs } from '@/lib/currency/rates'
 import { projectCashFlow } from '@/lib/cash-flow/project'
 import { getDailyVolatility } from '@/lib/cash-flow/volatility'
 import { Amount } from '@/components/app/amount'
-import { BudgetProgressCard } from '@/components/app/budget-progress'
 import { CashFlowTeaser } from '@/components/app/cash-flow-teaser'
 import { DebtsSummaryCard } from '@/components/app/debts-summary-card'
 import { EmptyState } from '@/components/app/empty-state'
 import { InsightCard } from '@/components/app/insight-card'
 import { NewAccountTrigger } from '@/components/app/new-account-trigger'
 import { NewTransactionTrigger } from '@/components/app/new-transaction-trigger'
+import { icons } from '@/lib/design/icons'
+import { formatMoney } from '@/lib/currency/format'
 import type { CurrencyCode } from '@/lib/currency/currencies'
 
 export const metadata: Metadata = {
-  title: 'Resumen',
+  title: 'Hoy',
 }
 
 const kindToTone = {
@@ -34,16 +34,35 @@ const kindToTone = {
   transfer: 'neutral',
 } as const
 
+function relativeDateLabel(iso: string): string {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const target = new Date(`${iso}T00:00:00`)
+  target.setHours(0, 0, 0, 0)
+  const diff = Math.round(
+    (target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+  )
+  if (diff < 0) return 'vencido'
+  if (diff === 0) return 'hoy'
+  if (diff === 1) return 'mañana'
+  if (diff < 7) return `en ${diff} días`
+  return new Date(`${iso}T12:00:00Z`).toLocaleDateString('es-CO', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  })
+}
+
 export default async function DashboardPage() {
   const user = await requireCurrentUser()
   const profile = await db.query.profiles.findFirst({
     where: eq(profiles.userId, user.id),
   })
   const baseCurrency = (profile?.baseCurrency ?? 'COP') as CurrencyCode
+
   const [
     accountsList,
     recent,
-    budgets,
     unreadInsights,
     debtsSummary,
     recurringRules,
@@ -51,16 +70,12 @@ export default async function DashboardPage() {
   ] = await Promise.all([
     listAccountsWithBalance(user.id),
     listTransactionsForUser(user.id, { limit: 5 }),
-    listBudgetsWithProgress(user.id),
-    listUnreadInsights(user.id, 3),
+    listUnreadInsights(user.id, 1),
     getDebtsSummary(user.id, baseCurrency),
     listRecurringForUser(user.id),
     getDailyVolatility(user.id),
   ])
 
-  // Una sola query para todas las tasas que el dashboard necesita: saldo
-  // de cuentas + deuda de tarjetas comparten el mismo set de pares
-  // non-base→base.
   const today = new Date().toISOString().slice(0, 10)
   const ratePairs = accountsList
     .filter((a) => a.currency !== baseCurrency)
@@ -70,11 +85,7 @@ export default async function DashboardPage() {
       ? await getRatesForPairs(ratePairs, today)
       : new Map<string, string>()
 
-  // Cuentas (líquidas + activos) — excluye tarjetas de crédito porque esas
-  // son deuda, no saldo a favor. El hero refleja "cuánto tienes hoy", no
-  // patrimonio neto (eso vive en /mi-dinero/cuentas).
   const ownedAccounts = accountsList.filter((a) => a.type !== 'credit_card')
-
   let totalNum = 0
   let totalPartial = false
   for (const acc of ownedAccounts) {
@@ -92,7 +103,6 @@ export default async function DashboardPage() {
     totalNum += bal * Number.parseFloat(rate)
   }
   const totalBase = totalNum.toFixed(2)
-  const totalSnapshot = { total: totalBase, partial: totalPartial }
 
   let creditCardDebtInBase = 0
   for (const a of accountsList) {
@@ -108,22 +118,53 @@ export default async function DashboardPage() {
     creditCardDebtInBase += rate ? owed * Number.parseFloat(rate) : owed
   }
 
-  // Presupuestos a destacar: primero exceeded, luego warning, luego safe por % desc.
-  const featuredBudgets = [...budgets]
-    .sort((a, b) => {
-      const rank = (s: typeof a.status) =>
-        s === 'exceeded' ? 0 : s === 'warning' ? 1 : 2
-      const rd = rank(a.status) - rank(b.status)
-      if (rd !== 0) return rd
-      return b.percent - a.percent
-    })
-    .slice(0, 4)
-
   const hasAccounts = accountsList.length > 0
+  const featuredInsight = unreadInsights[0] ?? null
+  const activeRules = recurringRules.filter((r) => r.active)
 
-  // Saludo contextual según la hora local del usuario. Si tiene timezone en su
-  // profile, lo respeta; si no, cae al server (Vercel pdx1 = America/Los_Angeles).
-  // Server-side para evitar hydration mismatch.
+  // Lo siguiente: pago de deuda próximo si hay, sino primer evento del
+  // cash flow proyectado (recurrente que cae).
+  const cashFlowPoints =
+    activeRules.length > 0
+      ? projectCashFlow(recurringRules, totalNum, 14, { volatility })
+      : null
+  const nextRecurringEvent = cashFlowPoints
+    ?.slice(1)
+    .flatMap((p) => p.events.map((e) => ({ ...e, date: p.date })))[0] ?? null
+
+  type NextThing = {
+    kind: 'debt' | 'recurring'
+    title: string
+    when: string
+    amount?: string
+    currency?: CurrencyCode
+    href: string
+  }
+  const nextThing: NextThing | null = (() => {
+    if (debtsSummary.nextPayment) {
+      return {
+        kind: 'debt',
+        title: debtsSummary.nextPayment.debtName,
+        when: relativeDateLabel(debtsSummary.nextPayment.date),
+        amount: debtsSummary.nextPayment.amount ?? undefined,
+        currency: (debtsSummary.nextPayment.currency as CurrencyCode) ?? undefined,
+        href: '/mi-dinero/deudas',
+      }
+    }
+    if (nextRecurringEvent) {
+      return {
+        kind: 'recurring',
+        title: nextRecurringEvent.description,
+        when: relativeDateLabel(nextRecurringEvent.date),
+        amount: String(nextRecurringEvent.amount),
+        currency: baseCurrency,
+        href: '/mi-plan/cash-flow',
+      }
+    }
+    return null
+  })()
+
+  // Saludo contextual.
   const userTz = profile?.timezone ?? undefined
   const hourFmt = new Intl.DateTimeFormat('en-US', {
     hour: 'numeric',
@@ -138,8 +179,13 @@ export default async function DashboardPage() {
         ? 'Buenas tardes'
         : 'Buenas noches'
 
+  const ArrowRight = icons['arrow-right']
+  const Bell = icons.bell
+
   return (
     <div className="flex min-w-0 flex-col gap-10 lg:gap-12">
+      {/* Hero — saludo + saldo + lo siguiente, todo junto en un bloque
+          editorial corto */}
       <header className="flex min-w-0 flex-col gap-1.5">
         <p className="text-text-tertiary text-[11px] uppercase tracking-[0.12em]">
           {greeting}
@@ -153,10 +199,9 @@ export default async function DashboardPage() {
           className="block truncate text-[28px] sm:text-4xl md:text-5xl lg:text-6xl"
         />
         <p className="text-text-tertiary text-xs">
-          Suma de {ownedAccounts.length}{' '}
-          {ownedAccounts.length === 1 ? 'cuenta' : 'cuentas'} · expresado en{' '}
-          {baseCurrency}
-          {totalSnapshot.partial && ' · conversión parcial'}
+          {ownedAccounts.length}{' '}
+          {ownedAccounts.length === 1 ? 'cuenta' : 'cuentas'} · {baseCurrency}
+          {totalPartial && ' · conversión parcial'}
         </p>
       </header>
 
@@ -168,76 +213,93 @@ export default async function DashboardPage() {
         />
       ) : (
         <>
-          <section className="flex flex-col gap-4">
-            <header className="flex items-baseline justify-between">
-              <h2 className="text-text text-sm font-semibold">Tus cuentas</h2>
-              <Link
-                href="/mi-dinero/cuentas"
-                className="text-text-secondary hover:text-text text-[13px] transition-colors"
-              >
-                Ver todas
-              </Link>
-            </header>
-            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {ownedAccounts.slice(0, 6).map((a) => (
-                <li
-                  key={a.id}
-                  className="border-border-default bg-surface flex flex-col gap-1 rounded-[12px] border p-4"
+          {/* Insight destacado primero — si Finanzia notó algo, es lo
+              primero que ves. */}
+          {featuredInsight && (
+            <section className="flex flex-col gap-3">
+              <header className="flex items-baseline justify-between">
+                <h2 className="text-text text-sm font-semibold">
+                  Lo que Finanzia notó
+                </h2>
+                <Link
+                  href="/mi-historia/insights"
+                  className="text-text-secondary hover:text-text text-[13px] transition-colors"
                 >
-                  <span className="text-text-tertiary text-[11px] uppercase tracking-[0.08em]">
-                    {a.name}
+                  Ver todas
+                </Link>
+              </header>
+              <InsightCard insight={featuredInsight} />
+            </section>
+          )}
+
+          {/* Lo siguiente — un solo widget con el próximo pago o recurrente */}
+          {nextThing && (
+            <section className="flex flex-col gap-3">
+              <h2 className="text-text text-sm font-semibold">Lo siguiente</h2>
+              <Link
+                href={nextThing.href}
+                className="border-border-default bg-surface hover:bg-surface-hover/60 group flex items-center justify-between gap-4 rounded-[12px] border p-4 transition-colors"
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="border-border-default flex h-9 w-9 shrink-0 items-center justify-center rounded-md border">
+                    <Bell strokeWidth={1.5} className="text-text-tertiary size-4" />
                   </span>
-                  <Amount
-                    value={a.currentBalance}
-                    currency={a.currency}
-                    kind={parseFloat(a.currentBalance) < 0 ? 'negative' : 'neutral'}
-                    className="text-lg"
+                  <div className="flex min-w-0 flex-col">
+                    <span className="text-text truncate text-sm font-medium">
+                      {nextThing.title}
+                    </span>
+                    <span className="text-text-tertiary text-[12px]">
+                      {nextThing.kind === 'debt' ? 'Próximo pago' : 'Próximo movimiento'}{' '}
+                      · {nextThing.when}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  {nextThing.amount && nextThing.currency && (
+                    <span className="text-text amount tabular text-sm">
+                      {formatMoney(nextThing.amount, {
+                        currency: nextThing.currency,
+                        compact: true,
+                      })}
+                    </span>
+                  )}
+                  <ArrowRight
+                    strokeWidth={1.5}
+                    className="text-text-tertiary group-hover:text-text size-4 transition-colors"
                   />
-                </li>
-              ))}
-            </ul>
-          </section>
+                </div>
+              </Link>
+            </section>
+          )}
 
-          <DebtsSummaryCard
-            summary={debtsSummary}
-            creditCardDebtInBase={creditCardDebtInBase}
-            currency={baseCurrency}
-          />
+          {/* Cash flow teaser solo si hay reglas activas */}
+          {activeRules.length > 0 && cashFlowPoints && (
+            <CashFlowTeaser
+              points={cashFlowPoints}
+              currency={baseCurrency}
+              startingBalance={totalNum}
+            />
+          )}
 
-          {recurringRules.filter((r) => r.active).length > 0 && (() => {
-            const points = projectCashFlow(recurringRules, totalNum, 30, {
-              volatility,
-            })
-            return (
-              <CashFlowTeaser
-                points={points}
-                currency={baseCurrency}
-                startingBalance={totalNum}
-              />
-            )
-          })()}
-
+          {/* Últimos movimientos */}
           <section className="flex flex-col gap-4">
             <header className="flex items-center justify-between">
               <h2 className="text-text text-sm font-semibold">
                 Últimos movimientos
               </h2>
-              <div className="flex items-center gap-3">
-                <Link
-                  href="/mi-dinero/movimientos"
-                  className="text-text-secondary hover:text-text text-[13px] transition-colors"
-                >
-                  Ver todos
-                </Link>
-                <NewTransactionTrigger variant="outline" label="Registrar" />
-              </div>
+              <Link
+                href="/mi-dinero/movimientos"
+                className="text-text-secondary hover:text-text text-[13px] transition-colors"
+              >
+                Ver todos
+              </Link>
             </header>
 
             {recent.length === 0 ? (
               <EmptyState
                 headline="Aún no hay movimientos."
                 body="Registra el primero — Finanzia comienza a construir tu bitácora desde el primer asiento."
-                action={<NewTransactionTrigger label="Registrar transacción" />}
+                action={<NewTransactionTrigger label="Registrar movimiento" />}
               />
             ) : (
               <ul className="border-border-default bg-surface flex flex-col rounded-[12px] border">
@@ -250,8 +312,10 @@ export default async function DashboardPage() {
                         : ''
                     }`}
                   >
-                    <div className="flex flex-col">
-                      <span className="text-text text-sm">{tx.description}</span>
+                    <div className="flex min-w-0 flex-col">
+                      <span className="text-text truncate text-sm">
+                        {tx.description}
+                      </span>
                       <span className="text-text-tertiary text-[11px]">
                         {tx.account.name}
                         {tx.category && ` · ${tx.category.name}`}
@@ -262,7 +326,7 @@ export default async function DashboardPage() {
                       currency={tx.currency}
                       kind={kindToTone[tx.kind]}
                       showPositiveSign={tx.kind === 'income'}
-                      className="text-sm"
+                      className="shrink-0 text-sm"
                     />
                   </li>
                 ))}
@@ -270,55 +334,12 @@ export default async function DashboardPage() {
             )}
           </section>
 
-          {unreadInsights.length > 0 && (
-            <section className="flex flex-col gap-4">
-              <header className="flex items-baseline justify-between">
-                <h2 className="text-text text-sm font-semibold">
-                  Lecturas recientes
-                </h2>
-                <Link
-                  href="/mi-historia/insights"
-                  className="text-text-secondary hover:text-text text-[13px] transition-colors"
-                >
-                  Ver todas
-                </Link>
-              </header>
-              <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {unreadInsights.map((insight) => (
-                  <li key={insight.id}>
-                    <InsightCard insight={insight} compact />
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          {featuredBudgets.length > 0 && (
-            <section className="flex flex-col gap-4">
-              <header className="flex items-baseline justify-between">
-                <h2 className="text-text text-sm font-semibold">
-                  Presupuestos del período
-                </h2>
-                <Link
-                  href="/mi-plan/presupuestos"
-                  className="text-text-secondary hover:text-text text-[13px] transition-colors"
-                >
-                  Ver todos
-                </Link>
-              </header>
-              <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {featuredBudgets.map((b) => (
-                  <li key={b.id}>
-                    <BudgetProgressCard
-                      budget={b}
-                      currency={baseCurrency}
-                      compact
-                    />
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
+          {/* Deuda — solo si hay algo que reportar */}
+          <DebtsSummaryCard
+            summary={debtsSummary}
+            creditCardDebtInBase={creditCardDebtInBase}
+            currency={baseCurrency}
+          />
         </>
       )}
     </div>
