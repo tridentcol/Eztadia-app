@@ -12,6 +12,7 @@ import { IntegracionesIASection } from '@/components/app/settings/integraciones-
 import { AlertasSection } from '@/components/app/settings/alertas-section'
 import { AparienciaSection } from '@/components/app/settings/apariencia-section'
 import { SesionSection } from '@/components/app/settings/sesion-section'
+import { ResponsiveSettingsSection } from '@/components/app/settings/responsive-settings-section'
 
 export const metadata: Metadata = {
   title: 'Ajustes',
@@ -63,29 +64,10 @@ export default async function AjustesPage({
         </h1>
       </header>
 
-      {/* TOC horizontal scrollable — visible siempre. En lg+ además hay sidebar
-          interno sticky a la izquierda. */}
-      <nav
-        aria-label="Secciones de ajustes"
-        className="border-border-default -mx-1 flex items-center gap-1 self-start overflow-x-auto rounded-[8px] border p-0.5 lg:hidden"
-      >
-        {SECTIONS.map((s) => (
-          <a
-            key={s.id}
-            href={`#${s.id}`}
-            className="text-text-secondary hover:bg-surface-hover/60 hover:text-text rounded-[6px] px-3 py-1.5 text-[13px] whitespace-nowrap transition-colors"
-          >
-            {s.label}
-          </a>
-        ))}
-      </nav>
-
-      <div className="grid grid-cols-1 gap-10 lg:grid-cols-[200px_1fr] lg:gap-16">
-        {/* Sidebar interno (desktop) */}
-        <aside
-          aria-label="Secciones de ajustes"
-          className="hidden lg:block"
-        >
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[200px_1fr] lg:gap-16">
+        {/* Sidebar interno — sólo desktop. En mobile la navegación es la
+            propia lista de acordeón. */}
+        <aside aria-label="Secciones de ajustes" className="hidden lg:block">
           <nav className="sticky top-[72px] flex flex-col gap-1">
             {SECTIONS.map((s) => (
               <a
@@ -99,32 +81,29 @@ export default async function AjustesPage({
           </nav>
         </aside>
 
-        {/* Secciones */}
-        <div className="flex min-w-0 flex-col gap-12 lg:gap-16">
+        {/* Secciones — acordeón en mobile, panel siempre abierto en desktop */}
+        <div className="flex min-w-0 flex-col gap-3 lg:gap-16">
           {SECTIONS.map((s) => (
-            <section
+            <ResponsiveSettingsSection
               key={s.id}
               id={s.id}
-              aria-label={s.label}
-              className="flex min-w-0 scroll-mt-[80px] flex-col gap-5"
+              label={s.label}
+              description={s.description}
             >
-              <header className="border-border-default/60 flex flex-col gap-0.5 border-b pb-3">
-                <h2 className="text-text text-base font-semibold">{s.label}</h2>
-                <p className="text-text-tertiary text-[12px]">{s.description}</p>
-              </header>
               <SectionContent
                 id={s.id}
                 user={user}
                 profile={profile ?? null}
                 searchParams={params}
               />
-            </section>
+            </ResponsiveSettingsSection>
           ))}
 
-          {/* Cross-link a recurrentes que vive fuera de Ajustes ahora. */}
+          {/* Cross-link a recurrentes */}
           <aside className="border-border-default/60 rounded-[8px] border border-dashed p-4 text-[12px]">
             <span className="text-text-secondary">
-              Las reglas recurrentes (salario, suscripciones, arriendo) viven en{' '}
+              Las reglas recurrentes (salario, suscripciones, arriendo) viven
+              en{' '}
               <Link
                 href="/mi-plan/recurrentes"
                 className="text-text underline-offset-2 hover:underline"
