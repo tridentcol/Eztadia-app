@@ -168,19 +168,19 @@
    ============================================================ */
 
 .dark {
-  --bg: #15102A;             /* ink — casi negro, tinte purple sutil */
-  --surface: #1C1739;        /* +6% luminosidad para cards/sidebar */
-  --surface-elevated: #251F47;/* +10% para popovers/modals */
-  --surface-hover: #221C41;
-  --border-default: #2E2750; /* visible pero discreto */
-  --border-emphasis: #463B6E;
+  --bg: #0A0717;             /* casi negro con tinte purple imperceptible */
+  --surface: #120F25;        /* cards/sidebar — sutilmente elevado */
+  --surface-elevated: #1A1633;/* popovers/modals */
+  --surface-hover: #16132C;
+  --border-default: #221C40; /* visible pero discreto */
+  --border-emphasis: #3A2F58;
   --text: #F5F0FF;           /* blanco cremoso para no glare */
-  --text-secondary: #B4A6CC;
-  --text-tertiary: #7A6FA0;
+  --text-secondary: #A89BC8;
+  --text-tertiary: #6E6390;
   --accent-ai: #B8A6F5;
   --positive: #7FB89F;
-  --negative: #E89F95;
-  --warning: #E0BF89;
+  --negative: #C97A72;       /* rojo muted — no compite con el bg purple */
+  --warning: #CFAA7E;
 
   /* Brand purples — paleta canónica del handoff, igual que en light. */
   --purple-deepest: #2D1370;
