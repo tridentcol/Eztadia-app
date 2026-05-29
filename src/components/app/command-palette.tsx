@@ -35,7 +35,7 @@ const navigation: NavItem[] = [
   { label: 'Ir a Presupuestos', href: '/mi-plan/presupuestos', icon: 'target' },
   { label: 'Ir a Metas', href: '/mi-plan/metas', icon: 'piggy-bank' },
   { label: 'Ir a Ahorro', href: '/mi-plan/ahorro', icon: 'trending-up' },
-  { label: 'Ir a Cash flow', href: '/mi-plan/cash-flow', icon: 'trending-down', keywords: 'flujo caja' },
+  { label: 'Ir a Cash flow', href: '/mi-dinero/cash-flow', icon: 'trending-down', keywords: 'flujo caja' },
   { label: 'Ir a Recurrentes', href: '/mi-plan/recurrentes', icon: 'repeat', keywords: 'recurring suscripciones recordatorios' },
 
   // Mi historia

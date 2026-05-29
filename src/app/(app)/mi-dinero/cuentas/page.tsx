@@ -9,8 +9,6 @@ import {
   getTotalBalanceInBase,
   listAccountsWithBalance,
 } from '@/lib/db/queries/accounts'
-import { getDebtsSummary } from '@/lib/db/queries/debts'
-import { getRatesForPairs } from '@/lib/currency/rates'
 import { EmptyState } from '@/components/app/empty-state'
 import { Amount } from '@/components/app/amount'
 import { NewAccountTrigger } from '@/components/app/new-account-trigger'
@@ -49,67 +47,33 @@ export default async function CuentasPage() {
 
   // Tarjetas viven en /mi-dinero/tarjetas. Aquí sólo cuentas líquidas y activos.
   const ownedAccounts = accountsList.filter((a) => a.type !== 'credit_card')
-  const creditCards = accountsList.filter((a) => a.type === 'credit_card')
 
-  // Patrimonio neto = activos − pasivos. Activos = cuentas no-crédito convertidas
-  // a base. Pasivos = saldos negativos de tarjetas + deudas formales.
-  const [{ total: assetsBase, partial: assetsPartial }, debtsSummary] =
-    await Promise.all([
-      getTotalBalanceInBase(user.id, baseCurrency, ownedAccounts),
-      getDebtsSummary(user.id, baseCurrency),
-    ])
-
-  // Deuda en tarjetas en base currency.
-  const today = new Date().toISOString().slice(0, 10)
-  const ccNonBase = creditCards.filter((c) => c.currency !== baseCurrency)
-  const ccRates =
-    ccNonBase.length > 0
-      ? await getRatesForPairs(
-          ccNonBase.map((c) => ({ from: c.currency, to: baseCurrency })),
-          today,
-        )
-      : new Map<string, string>()
-
-  let ccDebtBase = 0
-  let ccPartial = false
-  for (const c of creditCards) {
-    const balance = Number.parseFloat(c.currentBalance)
-    if (balance >= 0) continue
-    const used = -balance
-    if (c.currency === baseCurrency) {
-      ccDebtBase += used
-      continue
-    }
-    const rate = ccRates.get(`${c.currency}->${baseCurrency}`)
-    if (!rate) {
-      ccPartial = true
-      ccDebtBase += used
-      continue
-    }
-    ccDebtBase += used * Number.parseFloat(rate)
-  }
-
-  const netWorth =
-    Number.parseFloat(assetsBase) -
-    ccDebtBase -
-    Number.parseFloat(debtsSummary.totalBalanceInBase)
-  const netWorthPartial = assetsPartial || ccPartial || debtsSummary.partial
+  // Suma de saldos de cuentas en moneda base. El patrimonio neto (activos −
+  // tarjetas − deudas) vive en Cash flow, donde el balance global tiene
+  // contexto y proyección.
+  const { total: totalBase, partial: totalPartial } = await getTotalBalanceInBase(
+    user.id,
+    baseCurrency,
+    ownedAccounts,
+  )
 
   return (
     <div className="flex min-w-0 flex-col gap-10 lg:gap-12">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-1.5">
-          <p className="text-text-secondary text-sm">Patrimonio neto</p>
+          <p className="text-text-secondary text-sm">Saldo en cuentas</p>
           <Amount
-            value={netWorth.toFixed(2)}
+            value={totalBase}
             currency={baseCurrency}
             display
-            kind={netWorth < 0 ? 'negative' : 'neutral'}
+            kind={parseFloat(totalBase) < 0 ? 'negative' : 'neutral'}
             className="block truncate text-[28px] sm:text-4xl md:text-5xl"
           />
           <p className="text-text-tertiary text-xs">
-            activos − tarjetas − deudas
-            {netWorthPartial && ' · conversión parcial'}
+            {ownedAccounts.length}{' '}
+            {ownedAccounts.length === 1 ? 'cuenta' : 'cuentas'} ·{' '}
+            {baseCurrency}
+            {totalPartial && ' · conversión parcial'}
           </p>
         </div>
         <NewAccountTrigger />

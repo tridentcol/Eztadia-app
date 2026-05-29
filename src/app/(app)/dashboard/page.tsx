@@ -158,7 +158,7 @@ export default async function DashboardPage() {
         when: relativeDateLabel(nextRecurringEvent.date),
         amount: String(nextRecurringEvent.amount),
         currency: baseCurrency,
-        href: '/mi-plan/cash-flow',
+        href: '/mi-dinero/cash-flow',
       }
     }
     return null

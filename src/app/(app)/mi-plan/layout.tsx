@@ -6,7 +6,6 @@ const TABS: SectionTab[] = [
   { label: 'Presupuestos', href: '/mi-plan/presupuestos' },
   { label: 'Metas', href: '/mi-plan/metas' },
   { label: 'Ahorro', href: '/mi-plan/ahorro' },
-  { label: 'Cash flow', href: '/mi-plan/cash-flow' },
   { label: 'Recurrentes', href: '/mi-plan/recurrentes' },
 ]
 
