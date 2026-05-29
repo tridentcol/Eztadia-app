@@ -5,7 +5,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { icons } from '@/lib/design/icons'
 import { cn } from '@/lib/utils'
 
-type Option = { id: string; name: string }
+type Option = {
+  id: string
+  name: string
+  /** Texto secundario opcional — útil para mostrar contexto (tipo de
+   *  cuenta, moneda, etc.) sin perder la jerarquía del nombre. */
+  subtitle?: string
+}
 
 type Props = {
   options: Option[]
@@ -56,7 +62,11 @@ export function CategoryCombobox({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return options
-    return options.filter((o) => o.name.toLowerCase().includes(q))
+    return options.filter((o) => {
+      if (o.name.toLowerCase().includes(q)) return true
+      if (o.subtitle?.toLowerCase().includes(q)) return true
+      return false
+    })
   }, [options, query])
 
   // Click fuera cierra el panel.
@@ -136,8 +146,8 @@ export function CategoryCombobox({
                   closePanel()
                 }
               }}
-              placeholder="Buscar categoría…"
-              aria-label="Buscar categoría"
+              placeholder="Buscar…"
+              aria-label="Buscar"
               // text-[16px] previene el auto-zoom de iOS Safari al focus.
               // En md+ bajamos a text-sm que se ve más proporcional.
               className="text-text placeholder:text-text-tertiary flex-1 bg-transparent py-2.5 text-[16px] outline-none md:text-sm"
@@ -191,10 +201,17 @@ export function CategoryCombobox({
                       role="option"
                       aria-selected={isSelected}
                       onClick={() => pick(opt.id)}
-                      className="text-text-secondary hover:bg-surface-hover hover:text-text flex h-9 w-full cursor-pointer items-center gap-2 rounded-[6px] px-3 text-sm outline-none transition-colors"
+                      className="text-text-secondary hover:bg-surface-hover hover:text-text flex w-full cursor-pointer items-center gap-2 rounded-[6px] px-3 py-1.5 text-sm outline-none transition-colors"
                     >
-                      <span className="flex-1 truncate text-left">
-                        {opt.name}
+                      <span className="flex min-w-0 flex-1 flex-col text-left">
+                        <span className="text-text truncate text-[14px]">
+                          {opt.name}
+                        </span>
+                        {opt.subtitle && (
+                          <span className="text-text-tertiary truncate text-[11px]">
+                            {opt.subtitle}
+                          </span>
+                        )}
                       </span>
                       {isSelected && (
                         <Check

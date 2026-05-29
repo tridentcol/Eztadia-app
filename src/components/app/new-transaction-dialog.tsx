@@ -310,23 +310,17 @@ function NewTransactionForm({
             <label className="text-text-tertiary text-[11px] uppercase tracking-[0.08em]">
               {kind === 'transfer' ? 'Desde' : isCreditCard ? 'Tarjeta' : 'Cuenta'}
             </label>
-            <Select value={accountId} onValueChange={setAccountId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Cuenta" />
-              </SelectTrigger>
-              <SelectContent>
-                {accounts.map((a) => (
-                  <SelectItem key={a.id} value={a.id}>
-                    <span className="flex items-center gap-2">
-                      <span>{a.name}</span>
-                      <span className="text-text-tertiary text-[11px]">
-                        {ACCOUNT_TYPE_LABEL[a.type] ?? a.type} · {a.currency}
-                      </span>
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <CategoryCombobox
+              options={accounts.map((a) => ({
+                id: a.id,
+                name: a.name,
+                subtitle: `${ACCOUNT_TYPE_LABEL[a.type] ?? a.type} · ${a.currency}`,
+              }))}
+              value={accountId}
+              onChange={setAccountId}
+              placeholder="Cuenta"
+              emptyLabel="Cuenta"
+            />
           </div>
 
           {kind === 'transfer' ? (
@@ -334,26 +328,17 @@ function NewTransactionForm({
               <label className="text-text-tertiary text-[11px] uppercase tracking-[0.08em]">
                 Hacia
               </label>
-              <Select
+              <CategoryCombobox
+                options={transferOptions.map((a) => ({
+                  id: a.id,
+                  name: a.name,
+                  subtitle: `${ACCOUNT_TYPE_LABEL[a.type] ?? a.type} · ${a.currency}`,
+                }))}
                 value={transferAccountId}
-                onValueChange={setTransferAccountId}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Cuenta destino" />
-                </SelectTrigger>
-                <SelectContent>
-                  {transferOptions.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      <span className="flex items-center gap-2">
-                        <span>{a.name}</span>
-                        <span className="text-text-tertiary text-[11px]">
-                          {a.currency}
-                        </span>
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={setTransferAccountId}
+                placeholder="Cuenta destino"
+                emptyLabel="Cuenta destino"
+              />
             </div>
           ) : (
             <div className="flex flex-col gap-1.5">
