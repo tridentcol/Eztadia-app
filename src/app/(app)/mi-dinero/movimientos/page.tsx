@@ -1,7 +1,10 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { eq } from 'drizzle-orm'
 
 import { requireCurrentUser } from '@/lib/auth'
+import { db } from '@/lib/db/client'
+import { profiles } from '@/lib/db/schema'
 import {
   countUnclassifiedTransactions,
   listAvailableCategories,
@@ -102,7 +105,7 @@ export default async function TransaccionesPage({
     Boolean(maxAmount) ||
     Boolean(categoryFilter)
 
-  const [list, available, unclassified, accounts, batches] = await Promise.all([
+  const [list, available, unclassified, accounts, batches, profile] = await Promise.all([
     listTransactionsForUser(user.id, {
       kind: dayFilter ? undefined : kind,
       accountId: params.accountId,
@@ -119,7 +122,9 @@ export default async function TransaccionesPage({
     dayFilter ? Promise.resolve(0) : countUnclassifiedTransactions(user.id),
     listUserAccountsBasic(user.id),
     listImportBatchesForUser(user.id, 12),
+    db.query.profiles.findFirst({ where: eq(profiles.userId, user.id) }),
   ])
+  const baseCurrency = profile?.baseCurrency ?? 'COP'
   const categoryOptions: CategoryOption[] = available.map((c) => ({
     id: c.id,
     name: c.name,
@@ -263,140 +268,21 @@ export default async function TransaccionesPage({
           body="Cuando importes un extracto o registres un gasto manualmente, lo verás aquí. Multi-divisa, ordenado, categorizable."
           action={<NewTransactionTrigger />}
         />
+      ) : dayFilter ? (
+        // Vista de un solo día (drill-in desde DayPicker): lista plana,
+        // sin sticky headers porque ya hay un único día visible.
+        <FlatList
+          list={list}
+          accounts={accounts}
+          categoryOptions={categoryOptions}
+        />
       ) : (
-        <>
-          {/* Mobile (<md): lista de cards apiladas */}
-          <ul className="flex flex-col gap-2 md:hidden">
-            {list.map((tx) => (
-              <li
-                key={tx.id}
-                className="border-border-default bg-surface flex min-w-0 flex-col gap-2 rounded-[12px] border p-4"
-              >
-                <div className="flex min-w-0 items-start justify-between gap-3">
-                  <div className="flex min-w-0 flex-col gap-0.5">
-                    <span className="text-text truncate text-[14px]">{tx.description}</span>
-                    <span className="text-text-tertiary truncate text-[11px]">
-                      {formatRelativeDate(tx.date)} · {tx.account.name}
-                      {tx.kind === 'transfer' && tx.transferAccount &&
-                        ` → ${tx.transferAccount.name}`}
-                    </span>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <Amount
-                      value={tx.amountOriginal}
-                      currency={tx.currency}
-                      kind={kindToTone[tx.kind]}
-                      showPositiveSign={tx.kind === 'income'}
-                      className="text-[14px]"
-                    />
-                    <TransactionActionsMenu
-                      transaction={{
-                        id: tx.id,
-                        kind: tx.kind,
-                        accountId: tx.account.id,
-                        categoryId: tx.category?.id ?? null,
-                        date: tx.date,
-                        amountOriginal: tx.amountOriginal,
-                        currency: tx.currency,
-                        description: tx.description,
-                        notes: tx.notes,
-                      }}
-                      accounts={accounts}
-                      categories={categoryOptions}
-                    />
-                  </div>
-                </div>
-                <CategoryCell
-                  transactionId={tx.id}
-                  txKind={tx.kind}
-                  currentCategoryId={tx.category?.id ?? null}
-                  currentCategoryName={tx.category?.name ?? null}
-                  aiCategorized={tx.aiCategorized}
-                  aiConfidence={tx.aiConfidence}
-                  options={categoryOptions}
-                />
-              </li>
-            ))}
-          </ul>
-
-          {/* Desktop (>=md): tabla */}
-          <div className="border-border-default bg-surface hidden overflow-hidden rounded-[12px] border md:block">
-            <table className="w-full">
-              <thead>
-                <tr className="border-border-default text-text-tertiary border-b text-[11px] uppercase tracking-[0.08em]">
-                  <th className="px-5 py-3 text-left font-medium">Fecha</th>
-                  <th className="px-5 py-3 text-left font-medium">Descripción</th>
-                  <th className="px-5 py-3 text-left font-medium">Cuenta</th>
-                  <th className="px-5 py-3 text-left font-medium">Categoría</th>
-                  <th className="px-5 py-3 text-right font-medium">Monto</th>
-                  <th className="w-10 px-3 py-3" aria-label="Acciones" />
-                </tr>
-              </thead>
-              <tbody>
-                {list.map((tx) => (
-                  <tr
-                    key={tx.id}
-                    className="border-border-default/60 hover:bg-surface-hover/60 border-b transition-colors last:border-b-0"
-                  >
-                    <td className="text-text-secondary tabular px-5 py-3.5 text-[13px]">
-                      {formatRelativeDate(tx.date)}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex flex-col">
-                        <span className="text-text text-sm">{tx.description}</span>
-                        {tx.kind === 'transfer' && tx.transferAccount && (
-                          <span className="text-text-tertiary text-[11px]">
-                            {tx.account.name} → {tx.transferAccount.name}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="text-text-secondary px-5 py-3.5 text-sm">
-                      {tx.account.name}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <CategoryCell
-                        transactionId={tx.id}
-                        txKind={tx.kind}
-                        currentCategoryId={tx.category?.id ?? null}
-                        currentCategoryName={tx.category?.name ?? null}
-                        aiCategorized={tx.aiCategorized}
-                        aiConfidence={tx.aiConfidence}
-                        options={categoryOptions}
-                      />
-                    </td>
-                    <td className="px-5 py-3.5 text-right">
-                      <Amount
-                        value={tx.amountOriginal}
-                        currency={tx.currency}
-                        kind={kindToTone[tx.kind]}
-                        showPositiveSign={tx.kind === 'income'}
-                        className="text-sm"
-                      />
-                    </td>
-                    <td className="px-3 py-3.5 text-right">
-                      <TransactionActionsMenu
-                        transaction={{
-                          id: tx.id,
-                          kind: tx.kind,
-                          accountId: tx.account.id,
-                          categoryId: tx.category?.id ?? null,
-                          date: tx.date,
-                          amountOriginal: tx.amountOriginal,
-                          currency: tx.currency,
-                          description: tx.description,
-                          notes: tx.notes,
-                        }}
-                        accounts={accounts}
-                        categories={categoryOptions}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
+        // Vista bitácora: agrupada por día con header sticky + neto del día.
+        <GroupedList
+          groups={groupByDay(list, baseCurrency)}
+          accounts={accounts}
+          categoryOptions={categoryOptions}
+        />
       )}
     </div>
   )
@@ -409,4 +295,327 @@ function formatRelativeDate(iso: string): string {
     month: 'short',
     timeZone: 'UTC',
   }).format(date)
+}
+
+type TxItem = Awaited<ReturnType<typeof listTransactionsForUser>>[number]
+type AccountBasic = Awaited<ReturnType<typeof listUserAccountsBasic>>[number]
+
+type DayGroup = {
+  day: string
+  txs: TxItem[]
+  netBase: number
+  baseCurrency: string
+}
+
+function groupByDay(list: TxItem[], baseCurrency: string): DayGroup[] {
+  const map = new Map<string, DayGroup>()
+  for (const tx of list) {
+    const existing = map.get(tx.date)
+    const group: DayGroup =
+      existing ?? { day: tx.date, txs: [], netBase: 0, baseCurrency }
+    group.txs.push(tx)
+    const amount = Number.parseFloat(tx.amountBase)
+    if (Number.isFinite(amount)) {
+      // Las transferencias no mueven el neto del día — solo recolocan
+      // plata entre cuentas del mismo usuario.
+      if (tx.kind === 'income') group.netBase += amount
+      else if (tx.kind === 'expense') group.netBase -= amount
+    }
+    if (!existing) map.set(tx.date, group)
+  }
+  return Array.from(map.values()).sort((a, b) => b.day.localeCompare(a.day))
+}
+
+function formatDayHeader(iso: string): string {
+  const today = new Date()
+  const todayIso = today.toISOString().slice(0, 10)
+  if (iso === todayIso) return 'Hoy'
+  today.setUTCDate(today.getUTCDate() - 1)
+  if (iso === today.toISOString().slice(0, 10)) return 'Ayer'
+  return new Date(`${iso}T12:00:00Z`).toLocaleDateString('es-CO', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    timeZone: 'UTC',
+  })
+}
+
+function FlatList({
+  list,
+  accounts,
+  categoryOptions,
+}: {
+  list: TxItem[]
+  accounts: AccountBasic[]
+  categoryOptions: CategoryOption[]
+}) {
+  return (
+    <>
+      <ul className="flex flex-col gap-2 md:hidden">
+        {list.map((tx) => (
+          <MobileRow
+            key={tx.id}
+            tx={tx}
+            accounts={accounts}
+            categoryOptions={categoryOptions}
+          />
+        ))}
+      </ul>
+      <div className="border-border-default bg-surface hidden overflow-hidden rounded-[12px] border md:block">
+        <DesktopHead />
+        <div>
+          {list.map((tx) => (
+            <DesktopRow
+              key={tx.id}
+              tx={tx}
+              accounts={accounts}
+              categoryOptions={categoryOptions}
+            />
+          ))}
+        </div>
+      </div>
+    </>
+  )
+}
+
+function GroupedList({
+  groups,
+  accounts,
+  categoryOptions,
+}: {
+  groups: DayGroup[]
+  accounts: AccountBasic[]
+  categoryOptions: CategoryOption[]
+}) {
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Mobile (<md): grupos con header sticky */}
+      <div className="flex flex-col gap-5 md:hidden">
+        {groups.map((g) => (
+          <section key={g.day} className="flex flex-col gap-2">
+            <DayHeader group={g} />
+            <ul className="flex flex-col gap-2">
+              {g.txs.map((tx) => (
+                <MobileRow
+                  key={tx.id}
+                  tx={tx}
+                  accounts={accounts}
+                  categoryOptions={categoryOptions}
+                />
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+      {/* Desktop (>=md): contenedor único con headers sticky */}
+      <div className="border-border-default bg-surface hidden overflow-hidden rounded-[12px] border md:block">
+        <DesktopHead />
+        {groups.map((g) => (
+          <div key={g.day}>
+            <DayHeader group={g} desktop />
+            {g.txs.map((tx) => (
+              <DesktopRow
+                key={tx.id}
+                tx={tx}
+                accounts={accounts}
+                categoryOptions={categoryOptions}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function DayHeader({
+  group,
+  desktop = false,
+}: {
+  group: DayGroup
+  desktop?: boolean
+}) {
+  const positive = group.netBase >= 0
+  const label = formatDayHeader(group.day)
+  const netLabel = `${positive ? '+' : '−'}${Math.abs(Math.round(group.netBase)).toLocaleString('es-CO')} ${group.baseCurrency}`
+  const count = group.txs.length
+  // El topbar mide 56px y el main añade pt-6 (24px) en mobile, py-10 en
+  // desktop. El sticky se ancla por debajo del topbar; en desktop la
+  // tabla además tiene su propio thead sticky, así que cargamos un
+  // top mayor para no superponerlos.
+  const stickyOffset = desktop ? 'top-[97px]' : 'top-[56px]'
+  return (
+    <header
+      className={cn(
+        'sticky z-10 flex items-baseline justify-between gap-3 px-5 py-2.5',
+        'backdrop-blur supports-[backdrop-filter]:bg-[color-mix(in_oklab,var(--bg)_82%,transparent)]',
+        'border-border-default/60 border-b',
+        stickyOffset,
+        !desktop &&
+          'border-border-default bg-surface -mx-1 rounded-[10px] border px-4',
+      )}
+    >
+      <span className="text-text capitalize text-[13px] font-medium">
+        {label}
+      </span>
+      <span className="flex items-baseline gap-2">
+        <span
+          className={cn(
+            'amount tabular text-[13px]',
+            positive ? 'text-positive' : 'text-negative',
+          )}
+        >
+          {netLabel}
+        </span>
+        <span className="text-text-tertiary text-[11px]">
+          · {count} {count === 1 ? 'mov' : 'movs'}
+        </span>
+      </span>
+    </header>
+  )
+}
+
+function DesktopHead() {
+  return (
+    <div
+      className="border-border-default bg-surface text-text-tertiary sticky top-[56px] z-20 grid grid-cols-[120px_1fr_180px_180px_140px_40px] gap-x-4 border-b px-5 py-3 text-[11px] uppercase tracking-[0.08em]"
+      role="row"
+    >
+      <span className="font-medium">Fecha</span>
+      <span className="font-medium">Descripción</span>
+      <span className="font-medium">Cuenta</span>
+      <span className="font-medium">Categoría</span>
+      <span className="text-right font-medium">Monto</span>
+      <span aria-label="Acciones" />
+    </div>
+  )
+}
+
+function DesktopRow({
+  tx,
+  accounts,
+  categoryOptions,
+}: {
+  tx: TxItem
+  accounts: AccountBasic[]
+  categoryOptions: CategoryOption[]
+}) {
+  return (
+    <div
+      className="border-border-default/60 hover:bg-surface-hover/60 grid grid-cols-[120px_1fr_180px_180px_140px_40px] items-center gap-x-4 border-b px-5 py-3.5 transition-colors last:border-b-0"
+      role="row"
+    >
+      <span className="text-text-secondary tabular text-[13px]">
+        {formatRelativeDate(tx.date)}
+      </span>
+      <div className="flex min-w-0 flex-col">
+        <span className="text-text truncate text-sm">{tx.description}</span>
+        {tx.kind === 'transfer' && tx.transferAccount && (
+          <span className="text-text-tertiary truncate text-[11px]">
+            {tx.account.name} → {tx.transferAccount.name}
+          </span>
+        )}
+      </div>
+      <span className="text-text-secondary truncate text-sm">
+        {tx.account.name}
+      </span>
+      <div className="min-w-0">
+        <CategoryCell
+          transactionId={tx.id}
+          txKind={tx.kind}
+          currentCategoryId={tx.category?.id ?? null}
+          currentCategoryName={tx.category?.name ?? null}
+          aiCategorized={tx.aiCategorized}
+          aiConfidence={tx.aiConfidence}
+          options={categoryOptions}
+        />
+      </div>
+      <div className="text-right">
+        <Amount
+          value={tx.amountOriginal}
+          currency={tx.currency}
+          kind={kindToTone[tx.kind]}
+          showPositiveSign={tx.kind === 'income'}
+          className="text-sm"
+        />
+      </div>
+      <div className="text-right">
+        <TransactionActionsMenu
+          transaction={{
+            id: tx.id,
+            kind: tx.kind,
+            accountId: tx.account.id,
+            categoryId: tx.category?.id ?? null,
+            date: tx.date,
+            amountOriginal: tx.amountOriginal,
+            currency: tx.currency,
+            description: tx.description,
+            notes: tx.notes,
+          }}
+          accounts={accounts}
+          categories={categoryOptions}
+        />
+      </div>
+    </div>
+  )
+}
+
+function MobileRow({
+  tx,
+  accounts,
+  categoryOptions,
+}: {
+  tx: TxItem
+  accounts: AccountBasic[]
+  categoryOptions: CategoryOption[]
+}) {
+  return (
+    <li className="border-border-default bg-surface flex min-w-0 flex-col gap-2 rounded-[12px] border p-4">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="text-text truncate text-[14px]">
+            {tx.description}
+          </span>
+          <span className="text-text-tertiary truncate text-[11px]">
+            {tx.account.name}
+            {tx.kind === 'transfer' && tx.transferAccount &&
+              ` → ${tx.transferAccount.name}`}
+          </span>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Amount
+            value={tx.amountOriginal}
+            currency={tx.currency}
+            kind={kindToTone[tx.kind]}
+            showPositiveSign={tx.kind === 'income'}
+            className="text-[14px]"
+          />
+          <TransactionActionsMenu
+            transaction={{
+              id: tx.id,
+              kind: tx.kind,
+              accountId: tx.account.id,
+              categoryId: tx.category?.id ?? null,
+              date: tx.date,
+              amountOriginal: tx.amountOriginal,
+              currency: tx.currency,
+              description: tx.description,
+              notes: tx.notes,
+            }}
+            accounts={accounts}
+            categories={categoryOptions}
+          />
+        </div>
+      </div>
+      <CategoryCell
+        transactionId={tx.id}
+        txKind={tx.kind}
+        currentCategoryId={tx.category?.id ?? null}
+        currentCategoryName={tx.category?.name ?? null}
+        aiCategorized={tx.aiCategorized}
+        aiConfidence={tx.aiConfidence}
+        options={categoryOptions}
+      />
+    </li>
+  )
 }
