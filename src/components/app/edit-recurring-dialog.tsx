@@ -157,7 +157,7 @@ function EditForm({
 
       <form
         onSubmit={handleSubmit}
-        className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto pr-1"
+        className="flex max-h-[calc(100dvh-var(--safe-top)-var(--safe-bottom)-32px)] flex-col gap-4 overflow-y-auto pr-1"
       >
         <Field label="Descripción">
           <Input

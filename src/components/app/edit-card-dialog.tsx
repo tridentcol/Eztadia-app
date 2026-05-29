@@ -177,7 +177,7 @@ function EditCardForm({
 
       <form
         onSubmit={handleSubmit(onSubmit)}
-        className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto pr-1"
+        className="flex max-h-[calc(100dvh-var(--safe-top)-var(--safe-bottom)-32px)] flex-col gap-4 overflow-y-auto pr-1"
       >
         {/* Identidad visual */}
         <div className="grid grid-cols-2 gap-3">
