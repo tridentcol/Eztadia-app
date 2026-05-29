@@ -26,7 +26,7 @@ export function searchTransactionsTool(ctx: CopilotContext) {
         .string()
         .regex(/^\d{4}-\d{2}-\d{2}$/)
         .optional(),
-      limit: z.number().int().min(1).max(50).optional(),
+      limit: z.number().int().min(1).max(25).optional(),
     }),
     execute: async (input) => {
       const conditions = [
@@ -43,7 +43,6 @@ export function searchTransactionsTool(ctx: CopilotContext) {
 
       const rows = await db
         .select({
-          id: transactions.id,
           date: transactions.date,
           description: transactions.description,
           merchant: transactions.merchant,
@@ -59,7 +58,7 @@ export function searchTransactionsTool(ctx: CopilotContext) {
         .leftJoin(categories, eq(categories.id, transactions.categoryId))
         .where(and(...conditions))
         .orderBy(desc(transactions.date))
-        .limit(input.limit ?? 20)
+        .limit(input.limit ?? 15)
 
       // Agregado útil para el LLM: suma en moneda base de los matches.
       let totalBase = 0
@@ -73,7 +72,6 @@ export function searchTransactionsTool(ctx: CopilotContext) {
         count: rows.length,
         totalBase: totalBase.toFixed(2),
         transactions: rows.map((r) => ({
-          id: r.id,
           date: r.date,
           description: r.description,
           merchant: r.merchant,
