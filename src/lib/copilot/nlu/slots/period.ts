@@ -1,4 +1,4 @@
-import type { Granularity, PeriodSlot } from '../../intents/types'
+import type { PeriodSlot } from '../../intents/types'
 import { normalize } from '../normalize'
 
 /**

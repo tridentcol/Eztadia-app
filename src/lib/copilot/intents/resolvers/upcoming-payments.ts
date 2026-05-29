@@ -4,7 +4,7 @@ import { listRecurringForUser } from '@/lib/db/queries/recurring'
 import { listDebts } from '@/lib/db/queries/debts'
 import type { TimelineItem } from '../../render/answer-ast'
 import type { IntentResolver } from '../types'
-import { money, periodOrThisMonth } from '../helpers'
+import { money } from '../helpers'
 
 export const resolveUpcomingPayments: IntentResolver = async (slots, ctx) => {
   // Ventana: el período si se indicó; si no, próximos 30 días.

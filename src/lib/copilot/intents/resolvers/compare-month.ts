@@ -2,7 +2,7 @@ import 'server-only'
 
 import { getNetCashFlowForPeriod } from '@/lib/db/queries/savings'
 import type { IntentResolver } from '../types'
-import { money, toneForNet } from '../helpers'
+import { money } from '../helpers'
 
 function monthRange(year: number, month: number) {
   const start = new Date(Date.UTC(year, month, 1))
