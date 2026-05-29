@@ -2,7 +2,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 export default function AjustesLoading() {
   return (
-    <div className="flex min-w-0 flex-col gap-8">
+    <div className="flex min-w-0 flex-col gap-10">
       <header className="flex flex-col gap-2">
         <Skeleton className="h-7 w-28 sm:h-8" />
         <Skeleton className="h-3 w-64" />

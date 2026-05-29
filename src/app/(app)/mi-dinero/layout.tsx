@@ -11,7 +11,7 @@ const TABS: SectionTab[] = [
 
 export default function MiDineroLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-8 lg:gap-10">
+    <div className="flex flex-col gap-10 lg:gap-12">
       <SectionTabs tabs={TABS} ariaLabel="Sub-secciones de Mi dinero" />
       {children}
     </div>

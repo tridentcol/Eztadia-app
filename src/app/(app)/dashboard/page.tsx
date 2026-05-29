@@ -115,9 +115,29 @@ export default async function DashboardPage() {
 
   const hasAccounts = accountsList.length > 0
 
+  // Saludo contextual según la hora local del usuario. Si tiene timezone en su
+  // profile, lo respeta; si no, cae al server (Vercel pdx1 = America/Los_Angeles).
+  // Server-side para evitar hydration mismatch.
+  const userTz = profile?.timezone ?? undefined
+  const hourFmt = new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    hour12: false,
+    timeZone: userTz,
+  })
+  const hour = Number.parseInt(hourFmt.format(new Date()), 10)
+  const greeting =
+    hour >= 5 && hour < 12
+      ? 'Buenos días'
+      : hour >= 12 && hour < 19
+        ? 'Buenas tardes'
+        : 'Buenas noches'
+
   return (
     <div className="flex min-w-0 flex-col gap-10 lg:gap-12">
       <header className="flex min-w-0 flex-col gap-1.5">
+        <p className="text-text-tertiary text-[11px] uppercase tracking-[0.12em]">
+          {greeting}
+        </p>
         <p className="text-text-secondary text-sm">Saldo total</p>
         <Amount
           value={totalBase}

@@ -56,7 +56,7 @@ export default async function CuentaDetailPage({ params }: Props) {
       {/* Breadcrumb + título + hero balance */}
       <header className="flex min-w-0 flex-col gap-1.5">
         <Link
-          href="/cuentas"
+          href="/mi-dinero/cuentas"
           className="text-text-tertiary hover:text-text-secondary text-[13px] transition-colors w-fit"
         >
           ← Cuentas

@@ -33,10 +33,20 @@ export default async function AppLayout({
 
   return (
     <SidebarProvider defaultOpen={sidebarDefault}>
+      <a
+        href="#main-content"
+        className="bg-surface text-text border-border-default focus:ring-accent-ai/40 sr-only z-50 rounded-[8px] border px-4 py-2 text-sm shadow-lg outline-none focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:ring-2"
+      >
+        Ir al contenido
+      </a>
       <AppSidebar />
       <SidebarInset>
         <Topbar unreadAlerts={unreadAlerts} />
-        <main className="mx-auto w-full max-w-[1120px] px-4 pt-6 pb-[88px] sm:px-6 md:pb-10 lg:px-8 lg:py-10">
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="mx-auto w-full max-w-[1120px] px-4 pt-6 pb-[88px] sm:px-6 md:pb-10 lg:px-8 lg:py-10"
+        >
           {children}
         </main>
       </SidebarInset>
