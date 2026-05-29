@@ -8,7 +8,7 @@ import { db } from '@/lib/db/client'
 import { conversations, messages, profiles } from '@/lib/db/schema'
 import { runCopilotChat } from '@/lib/ai/copilot'
 import { getAnthropic } from '@/lib/ai/anthropic'
-import { runEngineFromHistory } from '@/lib/copilot/engine'
+import { routeLocal } from '@/lib/copilot/orchestrator'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -91,39 +91,43 @@ export async function POST(req: Request) {
   const incoming = parsedBody.messages as IncomingMessage[]
   const todayIso = new Date().toISOString().slice(0, 10)
 
-  // ---- Decide modo: con provider → LLM; sin él → heurístico. ----
+  // ---- Ruteo local-first. ----
+  // Siempre intentamos el motor local primero. Si es confiado, responde local
+  // (gratis, aunque haya LLM key). Si no, defiere: al LLM si hay provider; al
+  // fallback de recuperación si no.
   const provider = await getAnthropic({ userId: user.id })
+  const utterances = incoming
+    .filter((m) => m?.role === 'user')
+    .map((m) => textOf(m))
+    .filter((t) => t.length > 0)
 
-  if (!provider) {
-    const utterances = incoming
-      .filter((m) => m?.role === 'user')
-      .map((m) => textOf(m))
-      .filter((t) => t.length > 0)
+  const routed = await routeLocal(utterances, {
+    userId: user.id,
+    baseCurrency,
+    todayIso,
+  })
 
-    const result = await runEngineFromHistory(utterances, {
-      userId: user.id,
-      baseCurrency,
-      todayIso,
+  if (process.env.FINANZIA_COPILOT_DEBUG === '1') {
+    console.log('[copilot:route]', {
+      last: utterances[utterances.length - 1],
+      mode: routed.mode,
+      intent: routed.result.resolvedIntent,
+      confidence: Number(routed.result.classification.confidence.toFixed(2)),
+      hasLLM: Boolean(provider),
     })
+  }
 
-    if (process.env.FINANZIA_COPILOT_DEBUG === '1') {
-      console.log('[copilot:heuristic]', {
-        last: utterances[utterances.length - 1],
-        intent: result.resolvedIntent,
-        ellipsis: result.viaEllipsis,
-        confidence: result.classification.confidence,
-        ranking: result.classification.ranking.slice(0, 3),
-      })
-    }
-
+  // Responde local cuando es confiado, o cuando no hay LLM (defer sin destino).
+  if (routed.mode === 'local' || !provider) {
+    const payload = routed.result.payload
     const stream = createUIMessageStream({
       execute({ writer }) {
-        const id = `heuristic-${todayIso}-${utterances.length}`
-        writer.write({ type: 'data-answer', id, data: result.payload })
+        const id = `local-${todayIso}-${utterances.length}`
+        writer.write({ type: 'data-answer', id, data: payload })
       },
     })
     const response = createUIMessageStreamResponse({ stream })
-    response.headers.set('x-copilot-mode', 'heuristic')
+    response.headers.set('x-copilot-mode', routed.mode === 'local' ? 'local' : 'fallback')
     return response
   }
 
