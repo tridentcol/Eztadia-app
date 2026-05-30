@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { llmMessageToAnswer } from '@/lib/copilot/adapters/llm-to-ast'
 import { derivePhase, PHASE_THINKING } from '@/lib/copilot/render/copilot-phase'
 import type { LoosePart } from '@/lib/copilot/parts'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { ChatStream } from '@/components/copilot/chat-stream'
 import { CopilotEmptyState } from '@/components/copilot/empty-state'
 import { CopilotEngineMenu } from '@/components/copilot/engine-menu'
@@ -67,6 +68,7 @@ function userText(m: LooseMsg): string {
 
 function CopilotChat({ onClose }: { onClose: () => void }) {
   const router = useRouter()
+  const isMobile = useIsMobile()
   const [input, setInput] = useState('')
   // Contexto conversacional efímero: vive en el cliente y se reenvía cada turno
   // como `body.context` en sendMessage (se lee en el handler, no en render).
@@ -229,7 +231,9 @@ function CopilotChat({ onClose }: { onClose: () => void }) {
           onChange={(e) => setInput(e.target.value)}
           placeholder="Pregunta cualquier cosa sobre tus finanzas"
           className="text-text placeholder:text-text-tertiary min-h-[44px] flex-1 bg-transparent px-2 py-2 text-base outline-none sm:text-sm"
-          autoFocus
+          // En mobile no autoenfocamos: abrir el copiloto no debe disparar el
+          // teclado y tapar el estado vacío / las sugerencias. En desktop sí.
+          autoFocus={!isMobile}
         />
         {isStreaming ? (
           <Button type="button" variant="outline" size="sm" onClick={() => stop()}>

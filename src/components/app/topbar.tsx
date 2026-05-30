@@ -34,6 +34,7 @@ const ENTRIES: TitleEntry[] = [
   { match: '/mi-plan', section: 'Mi plan' },
 
   { match: '/mi-historia/insights', section: 'Mi historia', sub: 'Insights' },
+  { match: '/mi-historia/comercios', section: 'Mi historia', sub: 'Comercios' },
   { match: '/mi-historia/informes', section: 'Mi historia', sub: 'Informes' },
   { match: '/mi-historia', section: 'Mi historia' },
 

@@ -132,6 +132,15 @@ export function CommandPalette() {
                 placeholder="Buscar movimientos o saltar a…"
                 className="text-text placeholder:text-text-tertiary flex-1 bg-transparent py-4 text-base outline-none md:text-sm"
               />
+              <Dialog.Close
+                aria-label="Cerrar"
+                className="text-text-tertiary hover:text-text -mr-2 flex size-11 shrink-0 items-center justify-center rounded-[8px] transition-colors sm:-mr-1 sm:size-8"
+              >
+                {(() => {
+                  const X = icons.x
+                  return <X strokeWidth={1.5} className="size-4" />
+                })()}
+              </Dialog.Close>
             </div>
 
             <Command.List className="max-h-[420px] overflow-y-auto py-2">

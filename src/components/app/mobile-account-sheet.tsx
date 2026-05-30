@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { UserButton, useUser } from '@clerk/nextjs'
+import { useClerk, useUser } from '@clerk/nextjs'
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { icons } from '@/lib/design/icons'
@@ -30,6 +30,7 @@ export function MobileAccountSheet({ open, onOpenChange, unread = 0 }: Props) {
   const prevPath = useRef(pathname)
   const openSearch = useCommandStore((s) => s.setOpen)
   const { user } = useUser()
+  const { signOut, openUserProfile } = useClerk()
 
   // Cierra en un cambio REAL de ruta (al tocar un Link o el botón atrás).
   useEffect(() => {
@@ -48,6 +49,14 @@ export function MobileAccountSheet({ open, onOpenChange, unread = 0 }: Props) {
   const Settings = icons.settings
   const Chevron = icons['chevron-right']
   const UserIcon = icons.user
+  const LogOut = icons['log-out']
+
+  function manageAccount() {
+    onOpenChange(false)
+    // Diferir: el panel de Clerk (otro overlay) compite con este Sheet modal si
+    // se abre en el mismo tick — el click caía al fondo. Lo abrimos ya cerrado.
+    setTimeout(() => openUserProfile(), 60)
+  }
 
   const avatarUrl = user?.imageUrl
   const displayName =
@@ -64,7 +73,12 @@ export function MobileAccountSheet({ open, onOpenChange, unread = 0 }: Props) {
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" aria-describedby={undefined} className="md:hidden">
+      <SheetContent
+        side="bottom"
+        aria-describedby={undefined}
+        showCloseButton={false}
+        className="md:hidden"
+      >
         <SheetHeader>
           <SheetTitle className="sr-only">Tu perfil</SheetTitle>
         </SheetHeader>
@@ -129,9 +143,16 @@ export function MobileAccountSheet({ open, onOpenChange, unread = 0 }: Props) {
             <Chevron strokeWidth={1.5} className="text-text-tertiary size-4 shrink-0" />
           </Link>
 
-          <div className="border-border-default mt-3 flex items-center gap-3 border-t px-1 pt-4">
-            <UserButton appearance={{ elements: { avatarBox: 'size-9' } }} />
-            <span className="text-text-secondary text-[13px]">Gestiona tu sesión</span>
+          <div className="border-border-default mt-2 flex flex-col gap-1 border-t pt-2">
+            <button type="button" onClick={manageAccount} className={ROW} aria-label="Administrar cuenta">
+              <UserIcon strokeWidth={1.5} className="text-text-tertiary size-[18px] shrink-0" />
+              <span className="flex-1">Administrar cuenta</span>
+              <Chevron strokeWidth={1.5} className="text-text-tertiary size-4 shrink-0" />
+            </button>
+            <button type="button" onClick={() => signOut()} className={ROW} aria-label="Cerrar sesión">
+              <LogOut strokeWidth={1.5} className="text-text-tertiary size-[18px] shrink-0" />
+              <span className="flex-1">Cerrar sesión</span>
+            </button>
           </div>
         </div>
       </SheetContent>

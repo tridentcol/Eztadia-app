@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 
@@ -55,6 +55,30 @@ export function MobileNav() {
     }
   }, [router])
 
+  // Oculta la barra mientras se escribe en un input (teclado abierto). Con
+  // `interactiveWidget: resizes-content` el viewport encoge sobre el teclado y un
+  // nav `fixed bottom-0` flotaría encima del contenido; ocultarlo da más espacio
+  // y replica el comportamiento nativo (la tab bar se esconde al teclear).
+  const [typing, setTyping] = useState(false)
+  useEffect(() => {
+    function sync() {
+      const el = document.activeElement as HTMLElement | null
+      setTyping(
+        !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable),
+      )
+    }
+    function onFocusOut() {
+      // Defer: al saltar de un input a otro, leer activeElement tras el tick.
+      window.setTimeout(sync, 0)
+    }
+    document.addEventListener('focusin', sync)
+    document.addEventListener('focusout', onFocusOut)
+    return () => {
+      document.removeEventListener('focusin', sync)
+      document.removeEventListener('focusout', onFocusOut)
+    }
+  }, [])
+
   function renderNavItem(item: NavItem) {
     const Icon = icons[item.icon]
     const active = isActive(pathname, item.href)
@@ -89,7 +113,10 @@ export function MobileNav() {
   return (
     <nav
       aria-label="Navegación principal móvil"
-      className="border-border-default bg-surface/95 fixed inset-x-0 bottom-0 z-40 border-t backdrop-blur-md md:hidden"
+      className={cn(
+        'border-border-default bg-surface/95 fixed inset-x-0 bottom-0 z-40 border-t backdrop-blur-md md:hidden',
+        typing && 'hidden',
+      )}
       style={{ paddingBottom: 'var(--safe-bottom)' }}
     >
       {/* Inner row con altura fija — el safe-area inset queda como padding del
