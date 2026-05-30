@@ -6,7 +6,6 @@ import { usePathname, useRouter } from 'next/navigation'
 
 import { icons, type IconName } from '@/lib/design/icons'
 import { cn } from '@/lib/utils'
-import { useDialogStore } from './dialog-store'
 
 type NavItem = {
   label: string
@@ -44,7 +43,6 @@ function isActive(pathname: string, href: string): boolean {
 export function MobileNav() {
   const pathname = usePathname()
   const router = useRouter()
-  const openDialog = useDialogStore((s) => s.open)
   const Spark = icons.sparkles
 
   // Warmup eager de las 4 rutas primarias al montar — Next limita el
@@ -102,16 +100,15 @@ export function MobileNav() {
             oscuro para contraste sobre el lavanda (igual que el badge de
             alertas). */}
         <div className="flex w-[72px] shrink-0 items-center justify-center">
-          <button
-            type="button"
-            onClick={() => openDialog('copilot')}
+          <Link
+            href="/copilot"
+            prefetch
             aria-label="Preguntar a Finanzia"
-            aria-haspopup="dialog"
             className="flex h-14 w-14 items-center justify-center rounded-full transition-transform motion-safe:active:scale-95"
             style={{ background: 'var(--accent-ai)', color: '#0A0A0B' }}
           >
             <Spark strokeWidth={2} className="size-6" />
-          </button>
+          </Link>
         </div>
 
         {RIGHT_ITEMS.map(renderNavItem)}

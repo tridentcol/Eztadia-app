@@ -9,7 +9,6 @@ export type AppDialogId =
   | 'new-category'
   | 'edit-category'
   | 'new-budget'
-  | 'copilot'
   | 'new-goal'
   | 'new-recurring'
   | 'new-debt'

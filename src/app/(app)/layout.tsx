@@ -14,7 +14,6 @@ import { NewAccountDialog } from '@/components/app/new-account-dialog'
 import { NewCardDialog } from '@/components/app/new-card-dialog'
 import { ScrollToTop } from '@/components/app/scroll-to-top'
 import { NewDebtDialog } from '@/components/app/new-debt-dialog'
-import { CopilotDialog } from '@/components/app/copilot-dialog'
 import { DialogsBundle } from '@/components/app/dialogs-bundle'
 import { OnboardingOverlay } from '@/components/app/onboarding-overlay'
 import { StandaloneDetector } from '@/components/app/standalone-detector'
@@ -60,7 +59,6 @@ export default async function AppLayout({
       <NewAccountDialog />
       <NewCardDialog />
       <NewDebtDialog />
-      <CopilotDialog />
       <Suspense fallback={null}>
         <DialogsBundle />
       </Suspense>

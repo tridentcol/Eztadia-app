@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useUser } from '@clerk/nextjs'
 
@@ -102,16 +103,17 @@ export function Topbar({ unreadAlerts = 0 }: { unreadAlerts?: number }) {
             <span className="hidden lg:inline">Registrar</span>
           </button>
 
-          {/* Preguntar — sólo desktop; en mobile el copiloto es el FAB central. */}
-          <button
-            type="button"
-            onClick={() => openDialog('copilot')}
+          {/* Preguntar — sólo desktop; en mobile el copiloto es el FAB central.
+              Navega a la página /copilot (ya no es un modal). */}
+          <Link
+            href="/copilot"
+            prefetch
             aria-label="Preguntar a Finanzia"
             className="border-border-default bg-surface hover:bg-surface-hover text-text-secondary hover:text-text hidden h-9 items-center gap-2 rounded-[8px] border px-2 text-sm transition-colors md:inline-flex lg:px-2.5"
           >
             <Spark strokeWidth={1.5} className="size-[14px]" style={{ color: 'var(--accent-ai)' }} />
             <span className="hidden lg:inline">Preguntar</span>
-          </button>
+          </Link>
 
           {/* Buscar — sólo desktop (en mobile vive bajo el avatar). */}
           <button

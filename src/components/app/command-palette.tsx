@@ -83,12 +83,12 @@ export function CommandPalette() {
       if (key === 'j') {
         e.preventDefault()
         setOpen(false)
-        setTimeout(() => openDialog('copilot'), 0)
+        router.push('/copilot')
       }
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [toggle, setOpen, openDialog])
+  }, [toggle, setOpen, router])
 
   function runNavigate(href: string) {
     setOpen(false)
@@ -292,7 +292,7 @@ export function CommandPalette() {
               >
                 <Command.Item
                   value="Preguntar a Finanzia copiloto IA"
-                  onSelect={() => runOpenDialog('copilot')}
+                  onSelect={() => runNavigate('/copilot')}
                   className="text-text-secondary aria-selected:bg-surface-hover aria-selected:text-text mx-2 flex h-9 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors"
                 >
                   <Ai
