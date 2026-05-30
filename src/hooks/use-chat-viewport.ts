@@ -8,32 +8,25 @@ type ChatViewportOptions = {
 }
 
 /**
- * Ancla un chat a pantalla completa al viewport VISIBLE en mobile, para que el
- * teclado virtual no desplace el layout (problema clásico de iOS Safari/PWA).
+ * Maneja el teclado virtual en el chat a pantalla completa sin mover el layout
+ * (problema clásico de iOS Safari/PWA), con la BARRA SUPERIOR siempre estática.
  *
- * Medido en dispositivo real, iOS al enfocar el input:
- *  1. Panea y encoge el viewport visible (`visualViewport.offsetTop` > 0,
- *     `height` baja). `dvh/svh/lvh` NO reaccionan al teclado → se mide por JS.
- *  2. Scrollea el DOCUMENTO (`scrollY` > 0) para "revelar" el input, y
- *     `overflow:hidden` no lo frena → arrastra al contenedor `fixed` hacia arriba.
+ * Enfoque: el contenedor ocupa SIEMPRE toda la pantalla (`fixed inset-0`, fondo
+ * bg-surface, alto fijo = layout viewport). NUNCA cambia de tamaño ni se traslada
+ * → el header no se mueve y nunca hay huecos vacíos. El teclado se maneja con un
+ * `padding-bottom` igual a su alto (`clientHeight - visualViewport.height`): eso
+ * sube el input (último hijo flex) justo encima del teclado, mientras el área del
+ * padding (bg-surface) queda detrás del teclado.
  *
- * El hook hace SNAP DIRECTO al viewport visible (sin transición propia, que
- * "perseguía" al teclado con lag): height = visualViewport.height, transform =
- * translate(offsetLeft, offsetTop), + lock fuerte (`body { position: fixed }`) +
- * `scrollTo(0,0)`, + fija el scroll de mensajes al FONDO al enfocar.
+ * Clave para que iOS NO panee (lo que hacía "scrollear" la barra superior): al
+ * enfocar subimos el input PREVENTIVAMENTE al alto de teclado ya conocido, ANTES
+ * de que iOS mida la posición del input. Si el input ya está sobre el teclado,
+ * iOS no necesita panear (`offsetTop` se queda en 0) y no movemos nada.
  *
- * ABRIR: el contenedor mide exactamente el área visible cada frame, montado sobre
- * la animación nativa del teclado (que iOS reporta razonablemente al subir).
- *
- * CERRAR: iOS reporta el crecimiento del viewport TARDE, así que el contenedor se
- * quedaba chico mientras el teclado ya había bajado → se veía el hueco vacío. Por
- * eso ANTICIPAMOS el cierre: al soltar el foco llevamos el contenedor a pantalla
- * completa de inmediato (sin esperar a iOS); el teclado nativo baja por encima del
- * chat ya completo → cero hueco.
- *
- * Para no perder frames de la animación nativa, al enfocar/desenfocar polleamos
- * cada frame ~700ms (los eventos de iOS son escasos). El breakpoint `sm` se
- * chequea en vivo; en desktop limpia estilos y suelta el lock.
+ * Refuerzos: lock fuerte (`body { position: fixed }`) + `scrollTo(0,0)` para que
+ * el documento no se desplace; fija el scroll de mensajes al fondo al enfocar;
+ * poll por frame durante la animación (los eventos de iOS son escasos). El
+ * breakpoint `sm` se chequea en vivo; en desktop limpia estilos y suelta el lock.
  */
 export function useChatViewport({ containerRef, scrollerRef }: ChatViewportOptions) {
   useEffect(() => {
@@ -79,34 +72,30 @@ export function useChatViewport({ containerRef, scrollerRef }: ChatViewportOptio
     }
 
     let pinUntil = 0
-    let closingUntil = 0
+    let preemptUntil = 0
+    let lastInset = 0 // último alto de teclado conocido (para subir preventivo)
+
     const pinScroller = () => {
       const sc = scrollerRef.current
       if (!sc) return
       const nearBottom = sc.scrollHeight - sc.scrollTop - sc.clientHeight <= 64
       if (Date.now() < pinUntil || nearBottom) sc.scrollTop = sc.scrollHeight
     }
+
     const apply = () => {
       if (desktopMql.matches) {
         unlock()
-        el.style.height = ''
-        el.style.transform = ''
+        el.style.paddingBottom = ''
         return
       }
       lock()
       if (window.scrollY !== 0) window.scrollTo(0, 0)
-      // Cierre anticipado: mientras el teclado baja, iOS reporta el crecimiento
-      // del viewport tarde (se vería el hueco). Forzamos pantalla completa hasta
-      // que iOS se pone al día (vv.height alcanza el alto cerrado) o vence el tope
-      // de tiempo — así la salida es continua, sin salto final.
-      if (Date.now() < closingUntil && vv.height < html.clientHeight - 4) {
-        el.style.height = `${html.clientHeight}px`
-        el.style.transform = 'translate(0px, 0px)'
-        pinScroller()
-        return
-      }
-      el.style.height = `${vv.height}px`
-      el.style.transform = `translate(${vv.offsetLeft}px, ${vv.offsetTop}px)`
+      const inset = Math.max(0, Math.round(html.clientHeight - vv.height))
+      if (inset > 0) lastInset = inset
+      // Mientras iOS aún no abre el teclado (inset 0) pero acabamos de enfocar,
+      // mantenemos el input subido al alto conocido → iOS no panea.
+      const target = Date.now() < preemptUntil && inset === 0 ? lastInset : inset
+      el.style.paddingBottom = `${target}px`
       pinScroller()
     }
 
@@ -119,8 +108,7 @@ export function useChatViewport({ containerRef, scrollerRef }: ChatViewportOptio
       })
     }
 
-    // Sigue la animación nativa del teclado frame a frame: pollea hasta
-    // `pollUntil` (los eventos de iOS son escasos). `disposed` corta el loop.
+    // Sigue la animación nativa del teclado frame a frame durante la ventana.
     let pollUntil = 0
     let polling = false
     let disposed = false
@@ -143,17 +131,22 @@ export function useChatViewport({ containerRef, scrollerRef }: ChatViewportOptio
     }
 
     const onFocusIn = () => {
-      // Al abrir: cancela cualquier cierre anticipado, fija el fondo, sigue denso.
-      closingUntil = 0
-      pinUntil = Date.now() + 700
-      pollUntil = Date.now() + 700
+      // Sube el input PREVENTIVAMENTE (sincrónico, antes de que iOS mida) al alto
+      // de teclado conocido, para que iOS no panee y la barra superior no se mueva.
+      const now = Date.now()
+      preemptUntil = now + 350
+      pinUntil = now + 700
+      pollUntil = now + 700
+      if (!desktopMql.matches && lastInset > 0) {
+        lock()
+        el.style.paddingBottom = `${lastInset}px`
+        pinScroller()
+      }
       poll()
     }
     const onFocusOut = () => {
-      // Al cerrar: anticipa pantalla completa mientras el teclado nativo baja.
-      const now = Date.now()
-      closingUntil = now + 650
-      pollUntil = now + 750
+      preemptUntil = 0
+      pollUntil = Date.now() + 700
       poll()
     }
 
@@ -172,8 +165,7 @@ export function useChatViewport({ containerRef, scrollerRef }: ChatViewportOptio
       window.removeEventListener('focusout', onFocusOut)
       window.removeEventListener('orientationchange', onFocusIn)
       unlock()
-      el.style.height = ''
-      el.style.transform = ''
+      el.style.paddingBottom = ''
     }
   }, [containerRef, scrollerRef])
 }
