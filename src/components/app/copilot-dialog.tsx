@@ -36,21 +36,20 @@ export function CopilotDialog() {
   const active = useDialogStore((s) => s.active)
   const close = useDialogStore((s) => s.close)
   const open = active === 'copilot'
-  const [vp, setVp] = useState<{ h: number; top: number } | null>(null)
+  const [vh, setVh] = useState<number | null>(null)
 
-  // VisualViewport: en mobile el diálogo es full-screen y `position: fixed` se
-  // ancla al LAYOUT viewport (no al visual). Al abrir el teclado en iOS el
-  // navegador desplaza la página (offsetTop > 0) y deja la altura completa, por
-  // lo que sin compensar se pierde el header arriba. Atamos el diálogo al
-  // recuadro visible real: top = vv.offsetTop, height = vv.height → header fijo,
-  // input justo sobre el teclado, mensajes scrollean. Desktop usa sm:* y no toca
-  // estas vars. (Chrome/Android ya lo cubre con interactiveWidget:resizes-content;
-  // este JS es además el fallback para iOS, donde esa meta se ignora.)
+  // Teclado mobile: en iOS `100dvh` NO encoge con el teclado, así que medimos la
+  // altura VISIBLE con VisualViewport y la fijamos como alto del diálogo. Anclado
+  // SIEMPRE en top:0 (NO seguimos offsetTop — eso mandaba el diálogo a la mitad
+  // de la pantalla cuando iOS hacía su scroll). Resultado: header fijo arriba,
+  // el alto encoge desde abajo con el teclado → input justo encima, mensajes
+  // scrollean. Sin teclado, vh = viewport visible = pantalla completa. Desktop
+  // usa sm:* y no toca la var.
   useEffect(() => {
     if (!open || typeof window === 'undefined') return
     const vv = window.visualViewport
     if (!vv) return
-    const sync = () => setVp({ h: vv.height, top: vv.offsetTop })
+    const sync = () => setVh(vv.height)
     sync()
     vv.addEventListener('resize', sync)
     vv.addEventListener('scroll', sync)
@@ -66,12 +65,8 @@ export function CopilotDialog() {
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
         <Dialog.Content
           aria-describedby={undefined}
-          style={
-            vp
-              ? ({ ['--copilot-vh']: `${vp.h}px`, ['--copilot-top']: `${vp.top}px` } as React.CSSProperties)
-              : undefined
-          }
-          className="border-border-default bg-surface fixed z-50 flex flex-col overflow-hidden border shadow-2xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 inset-x-0 top-[var(--copilot-top,0px)] h-[var(--copilot-vh,100dvh)] rounded-none sm:inset-auto sm:top-[12vh] sm:left-1/2 sm:h-[640px] sm:max-h-[76dvh] sm:w-[680px] sm:max-w-[calc(100vw-32px)] sm:-translate-x-1/2 sm:rounded-[16px] data-[state=closed]:sm:zoom-out-95 data-[state=open]:sm:zoom-in-95"
+          style={vh ? ({ ['--copilot-vh']: `${vh}px` } as React.CSSProperties) : undefined}
+          className="border-border-default bg-surface fixed z-50 flex flex-col overflow-hidden border shadow-2xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 inset-x-0 top-0 h-[var(--copilot-vh,100dvh)] rounded-none sm:inset-auto sm:top-[12vh] sm:left-1/2 sm:h-[640px] sm:max-h-[76dvh] sm:w-[680px] sm:max-w-[calc(100vw-32px)] sm:-translate-x-1/2 sm:rounded-[16px] data-[state=closed]:sm:zoom-out-95 data-[state=open]:sm:zoom-in-95"
         >
           <Dialog.Title className="sr-only">Preguntar a Finanzia</Dialog.Title>
           {open && <CopilotChat onClose={close} />}

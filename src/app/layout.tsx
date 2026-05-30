@@ -65,10 +65,6 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  // Al abrir el teclado (p.ej. el input del copiloto), redimensiona el área de
-  // contenido en vez de overlayear: el dvh se ajusta sobre el teclado y la app
-  // no se desplaza fuera de los límites del layout.
-  interactiveWidget: 'resizes-content',
 }
 
 export default async function RootLayout({
