@@ -227,11 +227,24 @@ export function CopilotChat() {
           autoFocus={!isMobile}
         />
         {isStreaming ? (
-          <Button type="button" variant="outline" size="sm" className="h-11" onClick={() => stop()}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-11"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => stop()}
+          >
             Detener
           </Button>
         ) : (
-          <Button type="submit" size="sm" className="h-11" disabled={!input.trim()}>
+          <Button
+            type="submit"
+            size="sm"
+            className="h-11"
+            onMouseDown={(e) => e.preventDefault()}
+            disabled={!input.trim()}
+          >
             Enviar
           </Button>
         )}
