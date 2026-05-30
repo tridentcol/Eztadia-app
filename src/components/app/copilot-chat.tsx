@@ -12,6 +12,7 @@ import { llmMessageToAnswer } from '@/lib/copilot/adapters/llm-to-ast'
 import { derivePhase, PHASE_THINKING } from '@/lib/copilot/render/copilot-phase'
 import type { LoosePart } from '@/lib/copilot/parts'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { useChatViewport } from '@/hooks/use-chat-viewport'
 import { ChatStream } from '@/components/copilot/chat-stream'
 import { CopilotEmptyState } from '@/components/copilot/empty-state'
 import { CopilotEngineMenu } from '@/components/copilot/engine-menu'
@@ -28,14 +29,11 @@ import {
  * chat normal: header arriba, mensajes scrolleables, input abajo. Se navega libre
  * (botón atrás / historial); sin modal radix → sin focus-trap ni "tocar fuera".
  *
- * Teclado en mobile (clave): en iOS, con el contenedor en flujo normal, enfocar
- * el input hace que el navegador desplace TODO el documento para "revelar" el
- * input → sube todo y el input queda arriba. Lo que hace un chat LLM real: el
- * contenedor es `fixed` (fuera de flujo, el documento no puede desplazarse) y su
- * alto = viewport VISIBLE (VisualViewport; en iOS `100dvh` no encoge con el
- * teclado). Anclado arriba (top:0), el alto baja desde abajo con el teclado: el
- * header no se mueve, el input queda justo encima del teclado, los mensajes
- * scrollean adentro. En desktop vuelve a flujo normal, centrado.
+ * Teclado en mobile: el contenedor es `fixed` y se ancla al viewport VISIBLE vía
+ * `useChatViewport` (altura + compensación del paneo de iOS con translateY). El
+ * layout no se mueve: el header queda fijo, el input se posa sobre el teclado y
+ * los últimos mensajes suben dentro del scroll interno. En desktop (≥sm) vuelve a
+ * flujo normal, centrado, y el hook se desactiva.
  */
 type LooseMsg = { id: string; role: string; parts?: LoosePart[] }
 
@@ -50,42 +48,18 @@ export function CopilotChat() {
   const router = useRouter()
   const isMobile = useIsMobile()
   const [input, setInput] = useState('')
-  const [vh, setVh] = useState<number | null>(null)
   const contextRef = useRef<ConversationContext>(EMPTY_CONTEXT)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const scrollerRef = useRef<HTMLDivElement>(null)
 
   const { messages, sendMessage, status, error, stop, setMessages } = useChat({
     transport: new DefaultChatTransport({ api: '/api/ai/chat' }),
   })
   const isStreaming = status === 'streaming' || status === 'submitted'
 
-  // Altura del viewport visible (sobre el teclado). Anclado arriba: el alto baja
-  // desde abajo con el teclado, no hay reposicionamiento ni scroll raro.
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const vv = window.visualViewport
-    if (!vv) return
-    const sync = () => setVh(vv.height)
-    sync()
-    vv.addEventListener('resize', sync)
-    vv.addEventListener('scroll', sync)
-    return () => {
-      vv.removeEventListener('resize', sync)
-      vv.removeEventListener('scroll', sync)
-    }
-  }, [])
-
-  // Bloquea el scroll del documento mientras el chat está montado. Combinado con
-  // el contenedor `fixed`, evita que iOS desplace TODA la página al enfocar el
-  // input (eso subía todo y dejaba el input arriba). Con esto el layout no se
-  // mueve: solo encoge la altura del chat desde abajo cuando sube el teclado.
-  useEffect(() => {
-    const html = document.documentElement
-    const prev = html.style.overflow
-    html.style.overflow = 'hidden'
-    return () => {
-      html.style.overflow = prev
-    }
-  }, [])
+  // Teclado mobile sin saltos de layout: ancla el contenedor `fixed` al viewport
+  // visible (altura + paneo de iOS). Ver el hook para el detalle por plataforma.
+  useChatViewport({ containerRef, scrollerRef })
 
   // Captura el contexto conversacional que emite el server (part data-context).
   useEffect(() => {
@@ -177,8 +151,8 @@ export function CopilotChat() {
 
   return (
     <div
-      style={vh ? ({ ['--copilot-vh']: `${vh}px` } as React.CSSProperties) : undefined}
-      className="bg-surface fixed inset-x-0 top-0 flex h-[var(--copilot-vh,100dvh)] flex-col overflow-hidden sm:static sm:mx-auto sm:h-dvh sm:max-w-3xl"
+      ref={containerRef}
+      className="bg-surface fixed inset-x-0 top-0 flex h-[100dvh] flex-col overflow-hidden sm:static sm:mx-auto sm:h-dvh sm:max-w-3xl"
     >
       <header
         className="border-border-default flex shrink-0 items-center justify-between gap-2 border-b px-3 py-3"
@@ -189,11 +163,16 @@ export function CopilotChat() {
             type="button"
             onClick={goBack}
             aria-label="Volver"
-            className="text-text-tertiary hover:text-text -ml-1 flex size-9 shrink-0 items-center justify-center rounded-[8px]"
+            className="text-text-tertiary hover:text-text -ml-1 flex size-11 shrink-0 items-center justify-center rounded-[8px] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-ai)]/40"
           >
             <Back strokeWidth={1.5} className="size-5" />
           </button>
-          <Spark strokeWidth={1.5} className="size-4 shrink-0" style={{ color: 'var(--accent-ai)' }} />
+          <Spark
+            strokeWidth={1.5}
+            aria-hidden
+            className="size-4 shrink-0"
+            style={{ color: 'var(--accent-ai)' }}
+          />
           <span className="text-text shrink-0 text-sm font-semibold">Finanzia</span>
           <CopilotEngineMenu options={engineOptions} value={engineValue} onSelect={selectEngine} />
         </div>
@@ -204,7 +183,7 @@ export function CopilotChat() {
               contextRef.current = EMPTY_CONTEXT
               setMessages([])
             }}
-            className="text-text-tertiary hover:text-text shrink-0 rounded-[6px] px-2 py-1 text-[12px]"
+            className="text-text-tertiary hover:text-text inline-flex min-h-11 shrink-0 items-center rounded-[6px] px-2.5 text-[12px] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-ai)]/40"
           >
             Limpiar
           </button>
@@ -212,7 +191,12 @@ export function CopilotChat() {
       </header>
 
       {/* min-h-0 + overscroll-contain: scroll real del flex-item, sin encadenar al body. */}
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">
+      <div
+        ref={scrollerRef}
+        role="log"
+        aria-label="Conversación con el copiloto"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4"
+      >
         {messages.length === 0 ? (
           <CopilotEmptyState onPick={submit} />
         ) : (
@@ -236,15 +220,18 @@ export function CopilotChat() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Pregunta cualquier cosa sobre tus finanzas"
-          className="text-text placeholder:text-text-tertiary min-h-[44px] flex-1 bg-transparent px-2 py-2 text-base outline-none sm:text-sm"
+          aria-label="Mensaje para el copiloto"
+          enterKeyHint="send"
+          autoComplete="off"
+          className="text-text placeholder:text-text-tertiary min-h-[44px] flex-1 rounded-[8px] bg-transparent px-2 py-2 text-base outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--accent-ai)]/40 sm:text-sm"
           autoFocus={!isMobile}
         />
         {isStreaming ? (
-          <Button type="button" variant="outline" size="sm" onClick={() => stop()}>
+          <Button type="button" variant="outline" size="sm" className="h-11" onClick={() => stop()}>
             Detener
           </Button>
         ) : (
-          <Button type="submit" size="sm" disabled={!input.trim()}>
+          <Button type="submit" size="sm" className="h-11" disabled={!input.trim()}>
             Enviar
           </Button>
         )}

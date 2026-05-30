@@ -95,7 +95,7 @@ export function AnswerActions({
             type="button"
             onClick={() => trigger(a, key)}
             disabled={isDone}
-            className="border-border-emphasis hover:bg-surface-hover text-text rounded-[8px] border px-3 py-1.5 text-[12px] transition-colors disabled:cursor-default disabled:opacity-50"
+            className="border-border-emphasis hover:bg-surface-hover text-text rounded-[8px] border px-3 py-1.5 text-[12px] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-ai)]/40 disabled:cursor-default disabled:opacity-50"
           >
             {isDone ? 'Hecho' : a.label}
           </button>

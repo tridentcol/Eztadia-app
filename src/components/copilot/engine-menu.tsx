@@ -55,7 +55,7 @@ export function CopilotEngineMenu({
           type="button"
           aria-label="Elegir el motor del copiloto"
           title={isLLM ? `Modelo: ${label}` : 'Motor local (sin IA)'}
-          className="text-text-tertiary hover:text-text data-[state=open]:text-text flex min-w-0 items-center gap-1 rounded-[6px] px-1.5 py-0.5 text-[11px] transition-colors"
+          className="text-text-tertiary hover:text-text data-[state=open]:text-text flex min-h-11 min-w-0 items-center gap-1 rounded-[6px] px-1.5 text-[11px] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-ai)]/40"
         >
           <span
             className={`size-1.5 shrink-0 rounded-full ${isLLM ? 'bg-accent-ai' : 'bg-text-tertiary'}`}

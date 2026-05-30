@@ -27,7 +27,7 @@ export function CopilotEmptyState({ onPick }: { onPick: (utterance: string) => v
               key={s.utterance}
               type="button"
               onClick={() => onPick(s.utterance)}
-              className="border-border-default hover:bg-surface-hover group flex flex-col gap-1.5 rounded-[12px] border px-3.5 py-3 text-left transition-colors"
+              className="border-border-default hover:bg-surface-hover group flex flex-col gap-1.5 rounded-[12px] border px-3.5 py-3 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-ai)]/40"
             >
               <Icon strokeWidth={1.5} className="text-text-tertiary group-hover:text-text size-4 transition-colors" />
               <span className="text-text text-[13px] font-medium">{s.title}</span>
