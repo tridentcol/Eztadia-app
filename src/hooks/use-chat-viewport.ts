@@ -26,11 +26,18 @@ type ChatViewportOptions = {
  *  - fija el scroll de mensajes al FONDO al enfocar (convención de chat: al abrir
  *    el teclado ves el último mensaje encima de él)
  *
- * Y al enfocar/desenfocar hace SEGUIMIENTO DENSO: pollea cada frame ~700ms para
- * montar el chat sobre el teclado al mismo ritmo que la animación (sin lag ni
- * saltos), además de escuchar resize/scroll para cambios posteriores. El
+ * Suavidad: iOS suelta los valores del `visualViewport` en POCOS pasos discretos
+ * (no frame a frame), así que aplicarlos crudos se ve escalonado. Durante la
+ * ventana de abrir/cerrar activamos una transición CSS corta (Noir easing, casi
+ * idéntico a la curva del teclado iOS) sobre `height`/`transform`: interpola esos
+ * pasos en un glide continuo. Fuera de la ventana se quita para no meter lag.
+ *
+ * Al enfocar/desenfocar hace SEGUIMIENTO DENSO: pollea cada frame durante la
+ * ventana para no perder ningún valor, además de escuchar resize/scroll. El
  * breakpoint `sm` se chequea en vivo; en desktop limpia estilos y suelta el lock.
  */
+const EASE = 'cubic-bezier(0.32, 0.72, 0, 1)'
+const TRANSITION = `height 220ms ${EASE}, transform 220ms ${EASE}`
 export function useChatViewport({ containerRef, scrollerRef }: ChatViewportOptions) {
   useEffect(() => {
     const el = containerRef.current
@@ -75,15 +82,20 @@ export function useChatViewport({ containerRef, scrollerRef }: ChatViewportOptio
     }
 
     let pinUntil = 0
+    let animateUntil = 0
     const apply = () => {
       if (desktopMql.matches) {
         unlock()
+        el.style.transition = ''
         el.style.height = ''
         el.style.transform = ''
         return
       }
       lock()
       if (window.scrollY !== 0) window.scrollTo(0, 0)
+      // Transición solo durante la ventana de abrir/cerrar: suaviza los pasos
+      // discretos de iOS en un glide; fuera de la ventana se quita (sin lag).
+      el.style.transition = Date.now() < animateUntil ? TRANSITION : ''
       el.style.height = `${vv.height}px`
       el.style.transform = `translate(${vv.offsetLeft}px, ${vv.offsetTop}px)`
       const sc = scrollerRef.current
@@ -127,13 +139,18 @@ export function useChatViewport({ containerRef, scrollerRef }: ChatViewportOptio
     }
 
     const onFocusIn = () => {
-      // Al abrir el teclado: fija el fondo (ver el último mensaje) y sigue denso.
-      pinUntil = Date.now() + 700
-      pollUntil = Date.now() + 700
+      // Al abrir: anima, fija el fondo (ver el último mensaje) y sigue denso.
+      const now = Date.now()
+      animateUntil = now + 520
+      pinUntil = now + 700
+      pollUntil = now + 700
       poll()
     }
     const onFocusOut = () => {
-      pollUntil = Date.now() + 700
+      // Al cerrar: anima el regreso a pantalla completa y sigue denso.
+      const now = Date.now()
+      animateUntil = now + 520
+      pollUntil = now + 700
       poll()
     }
 
@@ -152,6 +169,7 @@ export function useChatViewport({ containerRef, scrollerRef }: ChatViewportOptio
       window.removeEventListener('focusout', onFocusOut)
       window.removeEventListener('orientationchange', onFocusIn)
       unlock()
+      el.style.transition = ''
       el.style.height = ''
       el.style.transform = ''
     }
