@@ -8,29 +8,24 @@ type ChatViewportOptions = {
 }
 
 /**
- * Maneja el teclado virtual en el chat a pantalla completa sin mover el layout, y
- * con la BARRA SUPERIOR fija (problema clásico de iOS Safari/PWA).
+ * Maneja el teclado virtual en el chat a pantalla completa con la BARRA SUPERIOR
+ * fija (problema clásico de iOS Safari/PWA).
  *
- * Lo medido en dispositivo real: iOS, al enfocar un input abajo, (1) panea/encoge
- * el viewport visible (`visualViewport.offsetTop` > 0, `height` baja), (2)
- * scrollea el documento, y (3) reporta los valores TARDE/escasos. Compensar el
- * paneo con `transform` siempre tiembla (el paneo va en el compositor; la
- * compensación en el hilo principal, con desfase). La única forma de que la barra
- * quede fija es que iOS NO panee.
+ * Medido en dispositivo real al abrir el teclado: iOS scrollea el DOCUMENTO
+ * (`window.scrollY` ~347) Y panea el viewport (`visualViewport.offsetTop` ~347)
+ * para "revelar" el input — y NO lo frena ni `overflow:hidden` ni `body:fixed`.
+ * Eso desplaza el contenedor `fixed` hacia arriba (su `rect.top` se va a -347).
  *
- * Estrategia:
- *  - SNAP directo: height = vv.height, transform = translate(offsetLeft, offsetTop).
- *  - APERTURA: al enfocar subimos el input de inmediato (encogemos al alto de
- *    teclado conocido + reflow forzado) ANTES de que iOS mida → iOS no panea →
- *    `offsetTop` queda en 0 y la barra superior no se mueve.
- *  - CIERRE: iOS reporta el crecimiento tarde, así que anticipamos pantalla
- *    completa de inmediato; el teclado nativo baja por encima → sin hueco.
- *  - Fondo del documento pintado del color del chat (bg-surface) → cualquier
- *    hueco transitorio es invisible.
- *  - Refuerzos: lock fuerte (`body { position: fixed }`) + `scrollTo(0,0)`,
- *    fijado al fondo del scroll, y poll por frame durante la animación.
+ * Lección clave: pelear el scroll con `scrollTo(0,0)` hace que iOS y nosotros
+ * rebotemos (0 ↔ 347) y la barra TIEMBLE. La cura es NO pelear: COMPENSAR el
+ * desplazamiento moviendo el contenedor `translate(0, offsetTop)` de forma
+ * SINCRÓNICA en el evento de scroll (sin esperar a rAF), para que la barra quede
+ * clavada sin rebote. La altura (= `visualViewport.height`) se ajusta aparte.
  *
- * El breakpoint `sm` se chequea en vivo; en desktop limpia estilos y suelta todo.
+ * CERRAR: iOS reporta el crecimiento del viewport tarde, así que anticipamos
+ * pantalla completa de inmediato. Fondo del documento del color del chat para que
+ * cualquier hueco transitorio sea invisible. El breakpoint `sm` se chequea en
+ * vivo; en desktop limpia estilos.
  */
 export function useChatViewport({ containerRef, scrollerRef }: ChatViewportOptions) {
   useEffect(() => {
@@ -44,11 +39,7 @@ export function useChatViewport({ containerRef, scrollerRef }: ChatViewportOptio
     const saved = {
       htmlOverflow: html.style.overflow,
       bodyOverflow: body.style.overflow,
-      bodyPosition: body.style.position,
-      bodyTop: body.style.top,
-      bodyLeft: body.style.left,
-      bodyRight: body.style.right,
-      bodyWidth: body.style.width,
+      bodyOverscroll: body.style.overscrollBehavior,
       bodyBackground: body.style.background,
     }
 
@@ -57,32 +48,22 @@ export function useChatViewport({ containerRef, scrollerRef }: ChatViewportOptio
       if (locked) return
       locked = true
       html.style.overflow = 'hidden'
-      body.style.position = 'fixed'
-      body.style.top = '0'
-      body.style.left = '0'
-      body.style.right = '0'
-      body.style.width = '100%'
       body.style.overflow = 'hidden'
-      // Fondo del color del chat → cualquier hueco transitorio es invisible.
+      body.style.overscrollBehavior = 'none'
       body.style.background = getComputedStyle(el).backgroundColor
     }
     const unlock = () => {
       if (!locked) return
       locked = false
       html.style.overflow = saved.htmlOverflow
-      body.style.position = saved.bodyPosition
-      body.style.top = saved.bodyTop
-      body.style.left = saved.bodyLeft
-      body.style.right = saved.bodyRight
-      body.style.width = saved.bodyWidth
       body.style.overflow = saved.bodyOverflow
+      body.style.overscrollBehavior = saved.bodyOverscroll
       body.style.background = saved.bodyBackground
     }
 
     let pinUntil = 0
     let closingUntil = 0
-    let openingUntil = 0
-    let lastInset = 0 // último alto de teclado conocido
+    const isClosing = () => Date.now() < closingUntil && vv.height < html.clientHeight - 4
 
     const pinScroller = () => {
       const sc = scrollerRef.current
@@ -90,9 +71,10 @@ export function useChatViewport({ containerRef, scrollerRef }: ChatViewportOptio
       const nearBottom = sc.scrollHeight - sc.scrollTop - sc.clientHeight <= 64
       if (Date.now() < pinUntil || nearBottom) sc.scrollTop = sc.scrollHeight
     }
-    const setBox = (height: number, offTop: number) => {
-      el.style.height = `${height}px`
-      el.style.transform = `translate(0px, ${offTop}px)`
+
+    // Compensa el desplazamiento del contenedor SINCRÓNICAMENTE (clava la barra).
+    const setTransform = () => {
+      el.style.transform = isClosing() ? 'translate(0px, 0px)' : `translate(0px, ${vv.offsetTop}px)`
     }
 
     const apply = () => {
@@ -103,23 +85,8 @@ export function useChatViewport({ containerRef, scrollerRef }: ChatViewportOptio
         return
       }
       lock()
-      if (window.scrollY !== 0) window.scrollTo(0, 0)
-      const inset = Math.max(0, Math.round(html.clientHeight - vv.height))
-      if (inset > 0) lastInset = inset
-      // CIERRE anticipado: pantalla completa ya (iOS reporta el crecimiento tarde).
-      if (Date.now() < closingUntil && vv.height < html.clientHeight - 4) {
-        setBox(html.clientHeight, 0)
-        pinScroller()
-        return
-      }
-      // APERTURA anticipada: mientras iOS aún no reporta el teclado, mantenemos el
-      // input subido al alto conocido → iOS no panea → barra superior fija.
-      if (Date.now() < openingUntil && inset === 0 && lastInset > 0) {
-        setBox(html.clientHeight - lastInset, 0)
-        pinScroller()
-        return
-      }
-      setBox(vv.height, vv.offsetTop)
+      el.style.height = `${isClosing() ? html.clientHeight : vv.height}px`
+      setTransform()
       pinScroller()
     }
 
@@ -130,6 +97,13 @@ export function useChatViewport({ containerRef, scrollerRef }: ChatViewportOptio
         frame = 0
         apply()
       })
+    }
+
+    // Compensación sincrónica en cada evento de scroll/pan (sin rebote), + ajuste
+    // de altura/pin por rAF.
+    const onViewport = () => {
+      setTransform()
+      schedule()
     }
 
     let pollUntil = 0
@@ -154,39 +128,30 @@ export function useChatViewport({ containerRef, scrollerRef }: ChatViewportOptio
     }
 
     const onFocusIn = () => {
-      const now = Date.now()
-      openingUntil = now + 400
       closingUntil = 0
-      pinUntil = now + 700
-      pollUntil = now + 700
-      // Sube el input YA (con reflow forzado) antes de que iOS mida → sin paneo.
-      if (!desktopMql.matches && lastInset > 0) {
-        lock()
-        setBox(html.clientHeight - lastInset, 0)
-        void el.offsetHeight
-        pinScroller()
-      }
+      pinUntil = Date.now() + 700
+      pollUntil = Date.now() + 700
       poll()
     }
     const onFocusOut = () => {
-      const now = Date.now()
-      closingUntil = now + 650
-      openingUntil = 0
-      pollUntil = now + 750
+      closingUntil = Date.now() + 650
+      pollUntil = Date.now() + 750
       poll()
     }
 
     apply()
-    vv.addEventListener('resize', schedule)
-    vv.addEventListener('scroll', schedule)
+    vv.addEventListener('resize', onViewport)
+    vv.addEventListener('scroll', onViewport)
+    window.addEventListener('scroll', setTransform, { passive: true })
     window.addEventListener('focusin', onFocusIn)
     window.addEventListener('focusout', onFocusOut)
     window.addEventListener('orientationchange', onFocusIn)
     return () => {
       disposed = true
       if (frame) window.cancelAnimationFrame(frame)
-      vv.removeEventListener('resize', schedule)
-      vv.removeEventListener('scroll', schedule)
+      vv.removeEventListener('resize', onViewport)
+      vv.removeEventListener('scroll', onViewport)
+      window.removeEventListener('scroll', setTransform)
       window.removeEventListener('focusin', onFocusIn)
       window.removeEventListener('focusout', onFocusOut)
       window.removeEventListener('orientationchange', onFocusIn)
