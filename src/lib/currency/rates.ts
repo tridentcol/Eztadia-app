@@ -4,6 +4,7 @@ import { and, desc, eq, lte, sql } from 'drizzle-orm'
 import { db } from '@/lib/db/client'
 import { exchangeRates } from '@/lib/db/schema'
 import { currencyCodes, type CurrencyCode } from './currencies'
+import { convertMoney } from './convert'
 
 /**
  * Provider: open.er-api.com (free tier, sin API key, base USD, refresh diario).
@@ -227,11 +228,8 @@ export async function convertAmount(
     }
     return { amount, rate: '1.000000', missing: true }
   }
-  const numericAmount = Number.parseFloat(amount)
-  const numericRate = Number.parseFloat(rate)
-  if (!Number.isFinite(numericAmount) || !Number.isFinite(numericRate)) {
-    throw new Error(`Conversión inválida: amount=${amount}, rate=${rate}`)
-  }
-  const converted = (numericAmount * numericRate).toFixed(2)
+  // Aritmética entera exacta (regla #4) — sin float. Lanza si amount/rate no
+  // son numéricos, igual que el guard anterior.
+  const converted = convertMoney(amount, rate)
   return { amount: converted, rate, missing: false }
 }
