@@ -1,10 +1,8 @@
 import { Suspense } from 'react'
 import { cookies } from 'next/headers'
-import { eq } from 'drizzle-orm'
 
 import { requireCurrentUser } from '@/lib/auth'
-import { db } from '@/lib/db/client'
-import { profiles } from '@/lib/db/schema'
+import { getProfile } from '@/lib/db/queries/profile'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { AppSidebar } from '@/components/app/app-sidebar'
 import { MobileNav } from '@/components/app/mobile-nav'
@@ -30,7 +28,7 @@ export default async function AppLayout({
   const [unreadAlerts, cookieStore, profile] = await Promise.all([
     countUnreadAlerts(user.id),
     cookies(),
-    db.query.profiles.findFirst({ where: eq(profiles.userId, user.id) }),
+    getProfile(user.id),
   ])
   const sidebarDefault = cookieStore.get('sidebar_state')?.value !== 'false'
 

@@ -1,12 +1,10 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { eq } from 'drizzle-orm'
 
 import { cookies } from 'next/headers'
 
 import { requireCurrentUser } from '@/lib/auth'
-import { db } from '@/lib/db/client'
-import { profiles } from '@/lib/db/schema'
+import { getProfile } from '@/lib/db/queries/profile'
 import { listAccountsWithBalance } from '@/lib/db/queries/accounts'
 import { listTransactionsForUser } from '@/lib/db/queries/transactions'
 import { listUnreadInsights } from '@/lib/db/queries/insights'
@@ -59,11 +57,11 @@ function relativeDateLabel(iso: string): string {
 
 export default async function DashboardPage() {
   const user = await requireCurrentUser()
-  // Estado del modo privacidad para el render inicial (evita el flash de saldos).
-  const balancesHidden = (await cookies()).get(PRIVACY_COOKIE)?.value === '1'
-  const profile = await db.query.profiles.findFirst({
-    where: eq(profiles.userId, user.id),
-  })
+  // cookies() (modo privacidad, evita el flash de saldos) y el perfil son
+  // independientes entre sí: se resuelven en paralelo. `getProfile` está
+  // memoizado por request, así que comparte el fetch con el layout `(app)`.
+  const [cookieStore, profile] = await Promise.all([cookies(), getProfile(user.id)])
+  const balancesHidden = cookieStore.get(PRIVACY_COOKIE)?.value === '1'
   const baseCurrency = (profile?.baseCurrency ?? 'COP') as CurrencyCode
 
   const [
