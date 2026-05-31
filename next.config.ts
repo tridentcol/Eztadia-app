@@ -50,6 +50,20 @@ const iaRedirects = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  experimental: {
+    // Tree-shaking dirigido de paquetes con barrels pesados: solo entra al
+    // bundle lo que se importa, no el index completo.
+    optimizePackageImports: [
+      'lucide-react',
+      'motion',
+      '@visx/axis',
+      '@visx/curve',
+      '@visx/group',
+      '@visx/responsive',
+      '@visx/scale',
+      '@visx/shape',
+    ],
+  },
   async headers() {
     return [
       {

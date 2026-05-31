@@ -12,8 +12,8 @@ import { formatMoney } from '@/lib/currency/format'
 import type { CurrencyCode } from '@/lib/currency/currencies'
 import { Amount } from '@/components/app/amount'
 import { EmptyState } from '@/components/app/empty-state'
-import { SavingsBarChart } from '@/components/app/savings-bar-chart'
-import { SavingsForecastChart } from '@/components/app/savings-forecast-chart'
+import { SavingsBarChart } from '@/components/app/savings-bar-chart-lazy'
+import { SavingsForecastChart } from '@/components/app/savings-forecast-chart-lazy'
 import type { SavingsPeriodRow } from '@/lib/db/queries/savings'
 
 export const metadata: Metadata = {
