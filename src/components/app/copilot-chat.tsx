@@ -16,6 +16,8 @@ import { useChatViewport } from '@/hooks/use-chat-viewport'
 import { ChatStream } from '@/components/copilot/chat-stream'
 import { CopilotEmptyState } from '@/components/copilot/empty-state'
 import { CopilotEngineMenu } from '@/components/copilot/engine-menu'
+import { CopilotToneSheet } from '@/components/copilot/tone-sheet'
+import type { ToneCardProps } from '@/app/(app)/ajustes/perfil-financiero/copilot-tone-card'
 import type { Turn } from '@/components/copilot/turn'
 import { EMPTY_CONTEXT, type ConversationContext } from '@/lib/copilot/conversation/reducer'
 import {
@@ -52,7 +54,13 @@ function assistantText(m: LooseMsg): string {
     .trim()
 }
 
-export function CopilotChat() {
+export function CopilotChat({
+  toneProps,
+  toneIntroSeen,
+}: {
+  toneProps: ToneCardProps
+  toneIntroSeen: boolean
+}) {
   const router = useRouter()
   const isMobile = useIsMobile()
   const [input, setInput] = useState('')
@@ -213,18 +221,21 @@ export function CopilotChat() {
           <span className="text-text shrink-0 text-sm font-semibold">Finanzia</span>
           <CopilotEngineMenu options={engineOptions} value={engineValue} onSelect={selectEngine} />
         </div>
-        {messages.length > 0 && (
-          <button
-            type="button"
-            onClick={() => {
-              contextRef.current = EMPTY_CONTEXT
-              setMessages([])
-            }}
-            className="text-text-tertiary hover:text-text inline-flex min-h-11 shrink-0 items-center rounded-[6px] px-2.5 text-[12px] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-ai)]/40"
-          >
-            Limpiar
-          </button>
-        )}
+        <div className="flex shrink-0 items-center gap-0.5">
+          <CopilotToneSheet toneProps={toneProps} introSeen={toneIntroSeen} />
+          {messages.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                contextRef.current = EMPTY_CONTEXT
+                setMessages([])
+              }}
+              className="text-text-tertiary hover:text-text inline-flex min-h-11 shrink-0 items-center rounded-[6px] px-2.5 text-[12px] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-ai)]/40"
+            >
+              Limpiar
+            </button>
+          )}
+        </div>
       </header>
 
       {/* min-h-0 + overscroll-contain: scroll real del flex-item, sin encadenar al body. */}

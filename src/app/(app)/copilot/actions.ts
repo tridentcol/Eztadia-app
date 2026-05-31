@@ -237,6 +237,37 @@ export async function getCopilotChoices(): Promise<{
   return { options, current }
 }
 
+/**
+ * Marca que el usuario ya vio la intro de tono del copiloto (el sheet "Cómo te
+ * habla"). Se setea al cerrar el sheet la primera vez para no auto-abrirlo de
+ * nuevo. Atómico (transacción + FOR UPDATE) para no pisar otras subclaves de
+ * `aiProfile.copilot` (p. ej. el motor elegido). No muta datos del usuario.
+ */
+export async function markCopilotToneIntroSeen(): Promise<ActionResult> {
+  const user = await requireCurrentUser()
+  try {
+    await db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({ aiProfile: profiles.aiProfile })
+        .from(profiles)
+        .where(eq(profiles.userId, user.id))
+        .for('update')
+      const base = (row?.aiProfile as Record<string, unknown> | null) ?? {}
+      const prev = (base.copilot as Record<string, unknown> | null) ?? {}
+      await tx
+        .update(profiles)
+        .set({
+          aiProfile: { ...base, copilot: { ...prev, toneIntroSeen: true } },
+          updatedAt: new Date(),
+        })
+        .where(eq(profiles.userId, user.id))
+    })
+  } catch {
+    return { ok: false, error: { code: 'db_error', message: 'No se pudo guardar.' } }
+  }
+  return { ok: true, data: undefined }
+}
+
 const engineSchema = z.string().min(1).max(80)
 
 /**

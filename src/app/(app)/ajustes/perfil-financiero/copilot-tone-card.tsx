@@ -81,8 +81,14 @@ export type ToneCardProps = {
  * Tarjeta "Cómo te habla el copiloto": edita las señales de persona que ajustan
  * el tono (literacy/commStyle/moneyStyle/horizon/focus) sin repetir el mini-test.
  * Persiste vía updateFinancialPersona (merge campo a campo en aiProfile.persona).
+ *
+ * `variant`: 'card' (default, Ajustes) envuelve en surface+border con su propio
+ * encabezado; 'sheet' va desnuda (el Sheet del copiloto aporta chrome y título).
  */
-export function CopilotToneCard(initial: ToneCardProps) {
+export function CopilotToneCard({
+  variant = 'card',
+  ...initial
+}: ToneCardProps & { variant?: 'card' | 'sheet' }) {
   const [literacy, setLiteracy] = useState(initial.literacy)
   const [commStyle, setCommStyle] = useState(initial.commStyle)
   const [moneyStyle, setMoneyStyle] = useState(initial.moneyStyle)
@@ -102,14 +108,24 @@ export function CopilotToneCard(initial: ToneCardProps) {
     })
   }
 
+  const bare = variant === 'sheet'
+
   return (
-    <div className="border-border-default bg-surface flex flex-col gap-4 rounded-[12px] border p-4">
-      <div className="flex flex-col gap-1">
-        <p className="text-text text-sm font-medium">Cómo te habla el copiloto</p>
-        <p className="text-text-secondary text-[13px]">
-          Opcional. Ajusta el tono y la profundidad de las respuestas a tu forma de leer.
-        </p>
-      </div>
+    <div
+      className={
+        bare
+          ? 'flex flex-col gap-4'
+          : 'border-border-default bg-surface flex flex-col gap-4 rounded-[12px] border p-4'
+      }
+    >
+      {!bare && (
+        <div className="flex flex-col gap-1">
+          <p className="text-text text-sm font-medium">Cómo te habla el copiloto</p>
+          <p className="text-text-secondary text-[13px]">
+            Opcional. Ajusta el tono y la profundidad de las respuestas a tu forma de leer.
+          </p>
+        </div>
+      )}
 
       <ChipGroup label="Conocimiento financiero" options={LITERACY_OPTIONS} value={literacy} onSelect={setLiteracy} />
       <ChipGroup label="Estilo de comunicación" options={COMM_STYLE_OPTIONS} value={commStyle} onSelect={setCommStyle} />
