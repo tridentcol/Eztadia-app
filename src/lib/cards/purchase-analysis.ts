@@ -56,7 +56,12 @@ export function analyzePurchase(input: PurchaseAnalysisInput): PurchaseAnalysisR
     monthlyInstallment = (amount * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1)
     totalWithInterest = monthlyInstallment * n
   }
-  const totalInterest = totalWithInterest - amount
+  // La amortización francesa es real (Math.pow), pero los montos que se
+  // muestran/aconsejan se redondean a centavos para no arrastrar ruido
+  // sub-centavo del float (regla #4 en el límite display).
+  monthlyInstallment = roundToCents(monthlyInstallment)
+  totalWithInterest = roundToCents(totalWithInterest)
+  const totalInterest = roundToCents(totalWithInterest - amount)
 
   // Utilización resultante.
   const limit = creditLimit ?? 0
@@ -113,4 +118,9 @@ export function analyzePurchase(input: PurchaseAnalysisInput): PurchaseAnalysisR
 
 function formatNumber(v: number): string {
   return v.toLocaleString('es-CO', { maximumFractionDigits: 0 })
+}
+
+/** Redondea a centavos (2 decimales), absorbiendo el ruido sub-centavo de float. */
+function roundToCents(v: number): number {
+  return Math.round((v + Number.EPSILON) * 100) / 100
 }
