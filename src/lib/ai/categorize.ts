@@ -1,5 +1,5 @@
 import 'server-only'
-import { and, eq, isNotNull, isNull, or, sql } from 'drizzle-orm'
+import { and, desc, eq, isNotNull, isNull, or, sql } from 'drizzle-orm'
 import { embedMany, generateObject } from 'ai'
 import { z } from 'zod'
 
@@ -135,6 +135,37 @@ async function listEligibleCategories(
     )
 }
 
+/**
+ * Few-shot dinámico: las correcciones EXPLÍCITAS del usuario (transacciones
+ * con `user_corrected`) son la señal más fuerte de cómo categoriza. Las
+ * inyectamos en el prompt del LLM para que respete sus preferencias. Latencia:
+ * un query indexado por (user_id, kind); datos quedan en la DB del usuario.
+ */
+async function listUserCorrectedExamples(
+  userId: string,
+  kind: 'income' | 'expense' | 'transfer',
+  limit = 8,
+): Promise<Array<{ description: string; merchant: string | null; categoryName: string }>> {
+  return db
+    .select({
+      description: transactions.description,
+      merchant: transactions.merchant,
+      categoryName: categories.name,
+    })
+    .from(transactions)
+    .innerJoin(categories, eq(categories.id, transactions.categoryId))
+    .where(
+      and(
+        eq(transactions.userId, userId),
+        eq(transactions.kind, kind),
+        eq(transactions.userCorrected, true),
+        isNull(transactions.deletedAt),
+      ),
+    )
+    .orderBy(desc(transactions.updatedAt))
+    .limit(limit)
+}
+
 async function llmFallback(
   userId: string,
   description: string,
@@ -146,6 +177,17 @@ async function llmFallback(
   const eligible = await listEligibleCategories(userId, kind)
   if (eligible.length === 0) return null
   const input = buildEmbeddingInput(description, merchant) ?? description
+  const examples = await listUserCorrectedExamples(userId, kind)
+  const fewShot =
+    examples.length > 0
+      ? `\n\nAsí categoriza ESTE usuario (correcciones suyas — respétalas si encaja):\n` +
+        examples
+          .map(
+            (e) =>
+              `- "${buildEmbeddingInput(e.description, e.merchant) ?? e.description}" → ${e.categoryName}`,
+          )
+          .join('\n')
+      : ''
   const schema = z.object({
     categoryId: z.string().uuid(),
     confidence: z.number().min(0).max(1),
@@ -161,7 +203,8 @@ async function llmFallback(
       prompt:
         `Transacción: "${input}"\n\n` +
         `Categorías disponibles (id · nombre):\n` +
-        eligible.map((c) => `${c.id} · ${c.name}`).join('\n'),
+        eligible.map((c) => `${c.id} · ${c.name}`).join('\n') +
+        fewShot,
     })
     if (!eligible.some((c) => c.id === object.categoryId)) return null
     return { categoryId: object.categoryId, confidence: object.confidence }
