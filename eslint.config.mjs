@@ -42,8 +42,10 @@ const eslintConfig = defineConfig([
     },
   },
   {
-    // env.ts es la unica frontera autorizada para leer process.env.
-    files: ["src/lib/env.ts"],
+    // env.ts es la frontera autorizada para process.env. instrumentation.ts y
+    // los config de Sentry leen NEXT_RUNTIME (var de runtime de Next, fuera del
+    // schema de env.ts), asi que tambien quedan exentos del guard.
+    files: ["src/lib/env.ts", "src/instrumentation.ts", "src/sentry.*.config.ts"],
     rules: {
       "no-restricted-syntax": "off",
     },

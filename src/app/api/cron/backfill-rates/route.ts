@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import * as Sentry from '@sentry/nextjs'
 
 import { env } from '@/lib/env'
 import { backfillProvisionalRates } from '@/lib/currency/backfill'
@@ -37,6 +38,7 @@ export async function GET(req: Request) {
     })
   } catch (err) {
     console.error('[cron/backfill-rates] run failed:', err)
+    Sentry.captureException(err)
     return NextResponse.json(
       { ok: false, error: { code: 'run_failed', message: 'No se pudo correr el backfill.' } },
       { status: 500 },

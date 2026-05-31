@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import * as Sentry from '@sentry/nextjs'
 
 import { env } from '@/lib/env'
 import { listUsersWithDueRules, runRecurringForUser } from '@/lib/recurring/tick'
@@ -38,6 +39,7 @@ export async function GET(req: Request) {
         results.push({ userId, ...r })
       } catch (err) {
         console.error(`[cron/recurring] error para ${userId}:`, err)
+        Sentry.captureException(err, { tags: { cron: 'recurring' }, extra: { userId } })
         failed++
       }
     }
@@ -53,6 +55,7 @@ export async function GET(req: Request) {
     })
   } catch (err) {
     console.error('[cron/recurring] run failed:', err)
+    Sentry.captureException(err)
     return NextResponse.json(
       { ok: false, error: { code: 'run_failed', message: 'No se pudieron procesar las recurrencias.' } },
       { status: 500 },

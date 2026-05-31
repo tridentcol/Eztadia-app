@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import * as Sentry from '@sentry/nextjs'
 
 import { env } from '@/lib/env'
 import { getActiveUserIds, runDetectorsForUser } from '@/lib/ai/insights'
@@ -40,6 +41,7 @@ export async function GET(req: Request) {
         results.push(result)
       } catch (err) {
         console.error(`[cron/insights] error para ${userId}:`, err)
+        Sentry.captureException(err, { tags: { cron: 'insights' }, extra: { userId } })
         failed++
       }
     }
@@ -55,6 +57,7 @@ export async function GET(req: Request) {
     })
   } catch (err) {
     console.error('[cron/insights] run failed:', err)
+    Sentry.captureException(err)
     return NextResponse.json(
       { ok: false, error: { code: 'run_failed', message: 'No se pudieron generar los insights.' } },
       { status: 500 },

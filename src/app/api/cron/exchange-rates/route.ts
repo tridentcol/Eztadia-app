@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import * as Sentry from '@sentry/nextjs'
 
 import { env } from '@/lib/env'
 import { fetchDailyRates, upsertRates } from '@/lib/currency/rates'
@@ -46,6 +47,7 @@ export async function GET(req: Request) {
     })
   } catch (err) {
     console.error('[cron/exchange-rates] fetch failed:', err)
+    Sentry.captureException(err)
     return NextResponse.json(
       {
         ok: false,
