@@ -44,6 +44,14 @@ function userText(m: LooseMsg): string {
     .join('')
 }
 
+function assistantText(m: LooseMsg): string {
+  return (m.parts ?? [])
+    .filter((p) => p.type === 'text' && typeof p.text === 'string')
+    .map((p) => p.text as string)
+    .join('')
+    .trim()
+}
+
 export function CopilotChat() {
   const router = useRouter()
   const isMobile = useIsMobile()
@@ -95,6 +103,20 @@ export function CopilotChat() {
       out.push({ id: 'pending', role: 'assistant', pending: true, phase: PHASE_THINKING })
     }
     return out
+  }, [messages, isStreaming])
+
+  // Anuncio para lectores de pantalla (región polite dedicada). Mientras
+  // streamea dice "Pensando…" una vez; al asentarse anuncia el texto final del
+  // copiloto. Así no se re-anuncia cada delta (lo que pasaría con aria-live en
+  // el log). El valor estable evita repeticiones entre renders.
+  const liveMessage = useMemo(() => {
+    if (isStreaming) return 'Pensando…'
+    const list = messages as unknown as LooseMsg[]
+    for (let i = list.length - 1; i >= 0; i--) {
+      const m = list[i]
+      if (m?.role === 'assistant') return assistantText(m) || 'Respuesta lista.'
+    }
+    return ''
   }, [messages, isStreaming])
 
   const [engineOptions, setEngineOptions] = useState<CopilotChoice[]>([])
@@ -202,6 +224,12 @@ export function CopilotChat() {
         ) : (
           <ChatStream turns={turns} onFollowUp={submit} onConfirm={() => router.refresh()} />
         )}
+      </div>
+
+      {/* Región de anuncios para lectores de pantalla: estado del stream y
+          respuesta final del copiloto, sin re-leer cada delta. */}
+      <div aria-live="polite" aria-atomic="true" className="sr-only">
+        {liveMessage}
       </div>
 
       {error && (
