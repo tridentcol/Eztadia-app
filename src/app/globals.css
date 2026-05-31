@@ -133,7 +133,7 @@
   --border-emphasis: #DDD6FE;/* purple-pale */
   --text: #15102A;           /* ink */
   --text-secondary: #3A2F58; /* graphite */
-  --text-tertiary: #8478A0;  /* muted */
+  --text-tertiary: #6E6293;  /* muted — WCAG AA ≥4.5:1 sobre paper/cream */
   --accent-ai: #7C6FCD;
   --positive: #2F7D5E;
   --negative: #B5413A;
@@ -206,7 +206,7 @@
   --border-emphasis: #2E2750;
   --text: #F5F0FF;           /* blanco cremoso para no glare */
   --text-secondary: #9F92BD;
-  --text-tertiary: #5E5482;
+  --text-tertiary: #8678AE;  /* muted — WCAG AA ≥4.5:1 sobre surfaces dark */
   --accent-ai: #B8A6F5;
   --positive: #7FB89F;
   --negative: #C97A72;
