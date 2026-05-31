@@ -50,6 +50,20 @@ const eslintConfig = defineConfig([
       "no-restricted-syntax": "off",
     },
   },
+  {
+    // Excepciones documentadas de max-lines (no son "un componente que crecio",
+    // son definiciones de datos o primitivos vendored): el schema Drizzle, el
+    // catalogo de tarjetas y el primitivo shadcn de sidebar. Asi el warning de
+    // max-lines refleja solo objetivos reales de extraccion.
+    files: [
+      "src/lib/db/schema.ts",
+      "src/lib/cards/catalog.ts",
+      "src/components/ui/sidebar.tsx",
+    ],
+    rules: {
+      "max-lines": "off",
+    },
+  },
   globalIgnores([
     ".next/**",
     "out/**",
