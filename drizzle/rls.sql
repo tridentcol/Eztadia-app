@@ -29,7 +29,12 @@ DECLARE
     'alerts',
     'import_batches',
     'user_integrations',
-    'debts'
+    'debts',
+    'savings_plans',
+    'savings_periods',
+    'monthly_reports',
+    'email_inbox_aliases',
+    'credit_card_profiles'
   ];
 BEGIN
   FOREACH t IN ARRAY tables LOOP
@@ -157,6 +162,41 @@ CREATE POLICY user_integrations_isolation ON user_integrations
 -- ----- debts -----
 DROP POLICY IF EXISTS debts_isolation ON debts;
 CREATE POLICY debts_isolation ON debts
+  FOR ALL
+  USING (user_id = (SELECT id FROM users WHERE clerk_id = auth.jwt() ->> 'sub'))
+  WITH CHECK (user_id = (SELECT id FROM users WHERE clerk_id = auth.jwt() ->> 'sub'));
+
+-- ----- savings_plans -----
+DROP POLICY IF EXISTS savings_plans_isolation ON savings_plans;
+CREATE POLICY savings_plans_isolation ON savings_plans
+  FOR ALL
+  USING (user_id = (SELECT id FROM users WHERE clerk_id = auth.jwt() ->> 'sub'))
+  WITH CHECK (user_id = (SELECT id FROM users WHERE clerk_id = auth.jwt() ->> 'sub'));
+
+-- ----- savings_periods -----
+DROP POLICY IF EXISTS savings_periods_isolation ON savings_periods;
+CREATE POLICY savings_periods_isolation ON savings_periods
+  FOR ALL
+  USING (user_id = (SELECT id FROM users WHERE clerk_id = auth.jwt() ->> 'sub'))
+  WITH CHECK (user_id = (SELECT id FROM users WHERE clerk_id = auth.jwt() ->> 'sub'));
+
+-- ----- monthly_reports -----
+DROP POLICY IF EXISTS monthly_reports_isolation ON monthly_reports;
+CREATE POLICY monthly_reports_isolation ON monthly_reports
+  FOR ALL
+  USING (user_id = (SELECT id FROM users WHERE clerk_id = auth.jwt() ->> 'sub'))
+  WITH CHECK (user_id = (SELECT id FROM users WHERE clerk_id = auth.jwt() ->> 'sub'));
+
+-- ----- email_inbox_aliases -----
+DROP POLICY IF EXISTS email_inbox_aliases_isolation ON email_inbox_aliases;
+CREATE POLICY email_inbox_aliases_isolation ON email_inbox_aliases
+  FOR ALL
+  USING (user_id = (SELECT id FROM users WHERE clerk_id = auth.jwt() ->> 'sub'))
+  WITH CHECK (user_id = (SELECT id FROM users WHERE clerk_id = auth.jwt() ->> 'sub'));
+
+-- ----- credit_card_profiles -----
+DROP POLICY IF EXISTS credit_card_profiles_isolation ON credit_card_profiles;
+CREATE POLICY credit_card_profiles_isolation ON credit_card_profiles
   FOR ALL
   USING (user_id = (SELECT id FROM users WHERE clerk_id = auth.jwt() ->> 'sub'))
   WITH CHECK (user_id = (SELECT id FROM users WHERE clerk_id = auth.jwt() ->> 'sub'));
