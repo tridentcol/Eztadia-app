@@ -216,7 +216,7 @@ export function OnboardingOverlay({ isOnboarded }: { isOnboarded: boolean }) {
           <button
             type="button"
             onClick={handleSkip}
-            className="text-text-tertiary hover:text-text-secondary text-sm transition-colors"
+            className="text-text-tertiary hover:text-text-secondary rounded-[6px] text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-ai)]/40"
           >
             Configurar más tarde
           </button>

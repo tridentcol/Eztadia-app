@@ -284,7 +284,7 @@ function NewTransactionForm({
                 onClick={() => setKind(k)}
                 aria-pressed={selected}
                 className={cn(
-                  'flex h-10 items-center justify-center gap-2 rounded-[8px] border text-[13px] font-medium transition-colors',
+                  'flex h-10 items-center justify-center gap-2 rounded-[8px] border text-[13px] font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-ai)]/40',
                   selected
                     ? 'border-border-emphasis bg-surface-hover text-text'
                     : 'border-border-default text-text-secondary hover:text-text hover:bg-surface-hover/60',
@@ -397,7 +397,7 @@ function NewTransactionForm({
                     type="button"
                     onClick={() => setDate(opt.value)}
                     className={cn(
-                      'rounded-[6px] px-2.5 py-1 text-[12px] transition-colors',
+                      'rounded-[6px] px-2.5 py-1 text-[12px] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-ai)]/40',
                       selected
                         ? 'bg-surface-hover text-text'
                         : 'text-text-secondary hover:bg-surface-hover/60',
@@ -435,7 +435,7 @@ function NewTransactionForm({
           <button
             type="button"
             onClick={() => setShowAdvanced(true)}
-            className="text-text-tertiary hover:text-text-secondary self-start text-[12px] underline-offset-2 transition-colors hover:underline"
+            className="text-text-tertiary hover:text-text-secondary self-start rounded-[6px] text-[12px] underline-offset-2 transition-colors outline-none hover:underline focus-visible:ring-2 focus-visible:ring-[color:var(--accent-ai)]/40"
           >
             + Agregar notas
           </button>

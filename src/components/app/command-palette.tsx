@@ -129,6 +129,7 @@ export function CommandPalette() {
               <Command.Input
                 value={query}
                 onValueChange={setQuery}
+                aria-label="Buscar y navegar"
                 placeholder="Buscar movimientos o saltar a…"
                 className="text-text placeholder:text-text-tertiary flex-1 bg-transparent py-4 text-base outline-none md:text-sm"
               />
