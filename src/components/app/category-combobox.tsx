@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 
 import { icons } from '@/lib/design/icons'
 import { cn } from '@/lib/utils'
@@ -50,8 +50,10 @@ export function CategoryCombobox({
 }: Props) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const [activeIndex, setActiveIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const listboxId = useId()
   const ChevronDown = icons['chevron-down']
   const Check = icons.check
   const Search = icons.search
@@ -69,6 +71,11 @@ export function CategoryCombobox({
     })
   }, [options, query])
 
+  // Lista unificada para navegación por teclado: '' (sin categoría) + filtradas.
+  const navOptions = useMemo(() => ['', ...filtered.map((o) => o.id)], [filtered])
+  const activeId = navOptions[activeIndex] ?? ''
+  const optionDomId = (id: string) => `${listboxId}-opt-${id || 'none'}`
+
   // Click fuera cierra el panel.
   useEffect(() => {
     if (!open) return
@@ -82,9 +89,43 @@ export function CategoryCombobox({
     return () => document.removeEventListener('pointerdown', handlePointerDown)
   }, [open])
 
+  // Mantiene visible la opción activa durante la navegación por teclado.
+  useEffect(() => {
+    if (!open) return
+    document
+      .getElementById(optionDomId(activeId))
+      ?.scrollIntoView({ block: 'nearest' })
+    // optionDomId/activeId derivan de listboxId+activeIndex; basta con estos deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeIndex, open, navOptions])
+
+  function onInputKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      closePanel()
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setActiveIndex((i) => Math.min(i + 1, navOptions.length - 1))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setActiveIndex((i) => Math.max(i - 1, 0))
+    } else if (e.key === 'Home') {
+      e.preventDefault()
+      setActiveIndex(0)
+    } else if (e.key === 'End') {
+      e.preventDefault()
+      setActiveIndex(navOptions.length - 1)
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      const id = navOptions[activeIndex]
+      if (id !== undefined) pick(id)
+    }
+  }
+
   function openPanel() {
     setOpen(true)
     setQuery('')
+    setActiveIndex(0)
     setTimeout(() => inputRef.current?.focus(), 0)
   }
 
@@ -139,15 +180,19 @@ export function CategoryCombobox({
             <input
               ref={inputRef}
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  e.preventDefault()
-                  closePanel()
-                }
+              onChange={(e) => {
+                setQuery(e.target.value)
+                // Filtrar reposiciona el resaltado en la primera opción.
+                setActiveIndex(0)
               }}
+              onKeyDown={onInputKeyDown}
               placeholder="Buscar…"
-              aria-label="Buscar"
+              aria-label="Buscar categoría"
+              role="combobox"
+              aria-expanded={open}
+              aria-controls={listboxId}
+              aria-autocomplete="list"
+              aria-activedescendant={optionDomId(activeId)}
               // text-[16px] previene el auto-zoom de iOS Safari al focus.
               // En md+ bajamos a text-sm que se ve más proporcional.
               className="text-text placeholder:text-text-tertiary flex-1 bg-transparent py-2.5 text-[16px] outline-none md:text-sm"
@@ -155,7 +200,9 @@ export function CategoryCombobox({
           </div>
 
           <ul
+            id={listboxId}
             role="listbox"
+            aria-label="Categorías"
             className={cn(
               'max-h-[280px] overflow-y-auto py-1',
               '[&::-webkit-scrollbar]:w-1.5',
@@ -169,10 +216,15 @@ export function CategoryCombobox({
             <li>
               <button
                 type="button"
+                id={optionDomId('')}
                 role="option"
                 aria-selected={value === ''}
                 onClick={() => pick('')}
-                className="text-text-secondary hover:bg-surface-hover hover:text-text flex h-9 w-full cursor-pointer items-center gap-2 rounded-[6px] px-3 text-sm outline-none transition-colors"
+                onPointerMove={() => setActiveIndex(0)}
+                className={cn(
+                  'text-text-secondary hover:bg-surface-hover hover:text-text flex h-9 w-full cursor-pointer items-center gap-2 rounded-[6px] px-3 text-sm outline-none transition-colors',
+                  activeId === '' && 'bg-surface-hover text-text',
+                )}
               >
                 <span className="flex-1 truncate text-left italic">
                   {emptyLabel}
@@ -192,16 +244,21 @@ export function CategoryCombobox({
                 Sin resultados.
               </li>
             ) : (
-              filtered.map((opt) => {
+              filtered.map((opt, idx) => {
                 const isSelected = opt.id === value
                 return (
                   <li key={opt.id}>
                     <button
                       type="button"
+                      id={optionDomId(opt.id)}
                       role="option"
                       aria-selected={isSelected}
                       onClick={() => pick(opt.id)}
-                      className="text-text-secondary hover:bg-surface-hover hover:text-text flex w-full cursor-pointer items-center gap-2 rounded-[6px] px-3 py-1.5 text-sm outline-none transition-colors"
+                      onPointerMove={() => setActiveIndex(idx + 1)}
+                      className={cn(
+                        'text-text-secondary hover:bg-surface-hover hover:text-text flex w-full cursor-pointer items-center gap-2 rounded-[6px] px-3 py-1.5 text-sm outline-none transition-colors',
+                        activeId === opt.id && 'bg-surface-hover text-text',
+                      )}
                     >
                       <span className="flex min-w-0 flex-1 flex-col text-left">
                         <span className="text-text truncate text-[14px]">
