@@ -33,9 +33,15 @@ export async function GET(req: Request) {
   try {
     const userIds = await getActiveUserIds()
     const results = []
+    let failed = 0
     for (const userId of userIds) {
-      const result = await runDetectorsForUser(userId)
-      results.push(result)
+      try {
+        const result = await runDetectorsForUser(userId)
+        results.push(result)
+      } catch (err) {
+        console.error(`[cron/insights] error para ${userId}:`, err)
+        failed++
+      }
     }
     return NextResponse.json({
       ok: true,
@@ -43,13 +49,14 @@ export async function GET(req: Request) {
         users: userIds.length,
         generated: results.reduce((a, r) => a + r.generated, 0),
         skipped: results.reduce((a, r) => a + r.skipped, 0),
+        failed,
         durationMs: Date.now() - startedAt,
       },
     })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'unknown'
+    console.error('[cron/insights] run failed:', err)
     return NextResponse.json(
-      { ok: false, error: { code: 'run_failed', message } },
+      { ok: false, error: { code: 'run_failed', message: 'No se pudieron generar los insights.' } },
       { status: 500 },
     )
   }

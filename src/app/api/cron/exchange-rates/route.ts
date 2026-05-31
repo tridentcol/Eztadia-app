@@ -45,11 +45,11 @@ export async function GET(req: Request) {
       },
     })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'unknown'
+    console.error('[cron/exchange-rates] fetch failed:', err)
     return NextResponse.json(
       {
         ok: false,
-        error: { code: 'fetch_failed', message },
+        error: { code: 'fetch_failed', message: 'No se pudieron actualizar las tasas.' },
       },
       { status: 502 },
     )

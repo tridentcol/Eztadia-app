@@ -31,9 +31,15 @@ export async function GET(req: Request) {
   try {
     const userIds = await listUsersWithDueRules(today)
     const results = []
+    let failed = 0
     for (const userId of userIds) {
-      const r = await runRecurringForUser(userId, today)
-      results.push({ userId, ...r })
+      try {
+        const r = await runRecurringForUser(userId, today)
+        results.push({ userId, ...r })
+      } catch (err) {
+        console.error(`[cron/recurring] error para ${userId}:`, err)
+        failed++
+      }
     }
     return NextResponse.json({
       ok: true,
@@ -41,13 +47,14 @@ export async function GET(req: Request) {
         users: userIds.length,
         processed: results.reduce((a, r) => a + r.processed, 0),
         created: results.reduce((a, r) => a + r.created, 0),
+        failed,
         durationMs: Date.now() - startedAt,
       },
     })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'unknown'
+    console.error('[cron/recurring] run failed:', err)
     return NextResponse.json(
-      { ok: false, error: { code: 'run_failed', message } },
+      { ok: false, error: { code: 'run_failed', message: 'No se pudieron procesar las recurrencias.' } },
       { status: 500 },
     )
   }
