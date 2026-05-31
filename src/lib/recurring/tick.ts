@@ -60,6 +60,9 @@ export async function tickRule(
   if (!rule.nextRun || rule.nextRun > todayIso) {
     return { ruleId, created: false, skipped: null }
   }
+  // Capturado ya estrechado a string: el closure de db.transaction más abajo
+  // no preserva el narrowing de `rule.nextRun`.
+  const nextRun = rule.nextRun
 
   const account = await db.query.accounts.findFirst({
     where: and(eq(accounts.id, rule.accountId), eq(accounts.archived, false)),
@@ -84,41 +87,50 @@ export async function tickRule(
     where: eq(profiles.userId, rule.userId),
   })
   const baseCurrency = profile?.baseCurrency ?? 'COP'
-  const conv = await convertAmount(rule.amount, rule.currency, baseCurrency, rule.nextRun, {
+  const conv = await convertAmount(rule.amount, rule.currency, baseCurrency, nextRun, {
     fallbackToOne: true,
   })
 
-  const [inserted] = await db
-    .insert(transactions)
-    .values({
-      userId: rule.userId,
-      accountId: rule.accountId,
-      categoryId: rule.categoryId,
-      date: rule.nextRun,
-      amountOriginal: rule.amount,
-      currency: rule.currency,
-      amountBase: conv.amount,
-      // Sin tasa (camino automatizado, sin UI para rechazar): provisional con
-      // exchange_rate=NULL para backfill, igual que el webhook — en vez de un
-      // 1:1 silencioso que distorsiona la base (regla #4).
-      exchangeRate: conv.missing ? null : conv.rate,
-      description: rule.description,
-      kind: rule.kind,
-      recurringRuleId: rule.id,
-    })
-    .returning({ id: transactions.id })
+  // Insert + avance de next_run en UNA transacción: si el proceso muere entre
+  // ambas, antes quedaba la transacción creada sin avanzar next_run y el
+  // próximo cron la duplicaba. Ahora es atómico (todo o nada).
+  const inserted = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .insert(transactions)
+      .values({
+        userId: rule.userId,
+        accountId: rule.accountId,
+        categoryId: rule.categoryId,
+        date: nextRun,
+        amountOriginal: rule.amount,
+        currency: rule.currency,
+        amountBase: conv.amount,
+        // Sin tasa (camino automatizado, sin UI para rechazar): provisional con
+        // exchange_rate=NULL para backfill, igual que el webhook — en vez de un
+        // 1:1 silencioso que distorsiona la base (regla #4).
+        exchangeRate: conv.missing ? null : conv.rate,
+        description: rule.description,
+        kind: rule.kind,
+        recurringRuleId: rule.id,
+      })
+      .returning({ id: transactions.id })
+
+    if (!row) return null
+
+    await tx
+      .update(recurringRules)
+      .set({
+        lastRun: nextRun,
+        nextRun: advanceNextRun(nextRun, rule.frequency),
+      })
+      .where(eq(recurringRules.id, rule.id))
+
+    return row
+  })
 
   if (!inserted) {
     return { ruleId, created: false, skipped: 'insert_failed' }
   }
-
-  await db
-    .update(recurringRules)
-    .set({
-      lastRun: rule.nextRun,
-      nextRun: advanceNextRun(rule.nextRun, rule.frequency),
-    })
-    .where(eq(recurringRules.id, rule.id))
 
   return { ruleId, created: true, skipped: null }
 }
