@@ -59,6 +59,8 @@ export function CopilotChat() {
   const contextRef = useRef<ConversationContext>(EMPTY_CONTEXT)
   const containerRef = useRef<HTMLDivElement>(null)
   const scrollerRef = useRef<HTMLDivElement>(null)
+  const headingRef = useRef<HTMLHeadingElement>(null)
+  const focusedHeadingOnce = useRef(false)
 
   const { messages, sendMessage, status, error, stop, setMessages } = useChat({
     transport: new DefaultChatTransport({ api: '/api/ai/chat' }),
@@ -68,6 +70,16 @@ export function CopilotChat() {
   // Teclado mobile sin saltos de layout: ancla el contenedor `fixed` al viewport
   // visible (altura + paneo de iOS). Ver el hook para el detalle por plataforma.
   useChatViewport({ containerRef, scrollerRef })
+
+  // A11y: al entrar a /copilot en mobile, llevamos el foco al encabezado (h1
+  // sr-only, no es input) para que el lector de pantalla aterrice en la página
+  // sin abrir el teclado. En desktop el input ya auto-enfoca (escribir directo).
+  useEffect(() => {
+    if (isMobile && !focusedHeadingOnce.current) {
+      focusedHeadingOnce.current = true
+      headingRef.current?.focus({ preventScroll: true })
+    }
+  }, [isMobile])
 
   // Captura el contexto conversacional que emite el server (part data-context).
   useEffect(() => {
@@ -176,6 +188,9 @@ export function CopilotChat() {
       ref={containerRef}
       className="bg-surface fixed inset-x-0 top-0 flex h-[100dvh] flex-col overflow-hidden sm:static sm:mx-auto sm:h-dvh sm:max-w-3xl"
     >
+      <h1 ref={headingRef} tabIndex={-1} className="sr-only">
+        Copiloto Finanzia
+      </h1>
       <header
         className="border-border-default flex shrink-0 items-center justify-between gap-2 border-b px-3 py-3"
         style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top, 0px))' }}

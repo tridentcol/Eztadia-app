@@ -141,8 +141,7 @@ export function Topbar({ unreadAlerts = 0 }: { unreadAlerts?: number }) {
           >
             {avatarUrl ? (
               <span
-                role="img"
-                aria-label=""
+                aria-hidden="true"
                 className="size-8 rounded-full bg-cover bg-center"
                 style={{ backgroundImage: `url(${avatarUrl})` }}
               />

@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import Papa from 'papaparse'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -63,10 +62,13 @@ export function ImporterClient({
     setParseError(null)
   }
 
-  function onPickFile(f: File) {
+  async function onPickFile(f: File) {
     setParseError(null)
     setFile(f)
     setFilename(f.name)
+    // papaparse (~45KB) se carga on-demand al elegir archivo, no en el bundle
+    // de la ruta que monta el importer.
+    const Papa = (await import('papaparse')).default
     Papa.parse<Record<string, unknown>>(f, {
       header: false,
       skipEmptyLines: true,
@@ -193,10 +195,11 @@ export function ImporterClient({
               type="number"
               min={0}
               value={headerRow}
-              onChange={(e) => {
+              onChange={async (e) => {
                 if (!file) return
                 const n = Number.parseInt(e.target.value, 10)
                 if (Number.isNaN(n)) return
+                const Papa = (await import('papaparse')).default
                 Papa.parse<string[]>(file, {
                   header: false,
                   skipEmptyLines: true,

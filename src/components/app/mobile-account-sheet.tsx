@@ -88,8 +88,7 @@ export function MobileAccountSheet({ open, onOpenChange, unread = 0 }: Props) {
           <div className="mb-2 flex items-center gap-3 px-1">
             {avatarUrl ? (
               <span
-                role="img"
-                aria-label=""
+                aria-hidden="true"
                 className="size-11 shrink-0 rounded-full bg-cover bg-center"
                 style={{ backgroundImage: `url(${avatarUrl})` }}
               />
